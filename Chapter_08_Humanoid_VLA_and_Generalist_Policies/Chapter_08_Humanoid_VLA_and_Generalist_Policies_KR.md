@@ -1,0 +1,479 @@
+**Volume 22. Humanoid Robot Software**
+
+# Chapter 08. Humanoid VLA and Generalist Policies
+
+## 08.01. Humanoid VLA System Architecture Overview
+
+![](images/image1.png){width="7.268055555555556in" height="7.268055555555556in"}
+
+휴머노이드 비전-언어-행동 시스템(Vision-Language-Action System)은 다중모달 인식(Multimodal Perception), 언어 이해(Language Understanding), 작업 추론(Task Reasoning), 물리적 제어(Physical Control)를 하나의 통합된 체화 지능 아키텍처(Embodied Intelligence Architecture)로 연결한다. 인식(Perception), 계획(Planning), 제어(Control)를 독립적으로 설계된 모듈로 분리하는 기존 로봇 파이프라인과 달리, VLA 시스템은 대규모 다중모달 로봇 데이터(Multimodal Robot Data)로부터 관측(Observation), 명령(Instruction), 행동(Action) 사이의 관계를 학습한다. 그 결과 생성되는 정책(Policy)은 현재의 물리적 환경에 의사결정을 연결하면서 인간의 의도를 해석할 수 있다.
+
+이 아키텍처는 휴머노이드 플랫폼에서 수집되는 다중모달 관측(Multimodal Observation)으로부터 시작된다. 머리 카메라(Head Camera)는 주변 작업 공간에 대한 자기중심적 표현(Egocentric Representation)을 제공하고, 손목 카메라(Wrist Camera)는 조작 과정에서 객체의 세부적인 모습을 제공한다. 관절 인코더(Joint Encoder), 관성측정장치(IMU), 힘-토크 센서(Force-Torque Sensor), 촉각 센서(Tactile Sensor), 기타 고유감각 채널(Proprioceptive Channel)은 로봇의 신체 상태를 나타낸다. 언어 명령(Language Instruction)은 객체 이동, 도구 조작, 용기 개방 또는 다단계 작업 수행과 같은 의미적 목표(Semantic Goal)를 제공한다.
+
+휴머노이드는 많은 구동 관절(Actuated Joint)을 가지며 전신을 이용해 환경과 상호작용하기 때문에, VLA의 관측 표현(Observation Representation)은 일반적인 이미지-언어 입력(Image-Language Input)을 넘어 확장되어야 한다. 시각 토큰(Visual Token)은 객체, 기하학적 구조, 사람, 장면 맥락(Scene Context)을 표현할 수 있으며, 고유감각 토큰(Proprioceptive Token)은 관절 위치, 속도, 접촉 상태, 신체 구성을 부호화한다. 이러한 이질적인 관측은 잠재 표현(Latent Representation)으로 변환되어 정책이 의미적 개념(Semantic Concept)을 물리적으로 도달 가능한 상태와 실행 가능한 행동에 연결할 수 있도록 한다.
+
+비전 인코더(Vision Encoder)는 카메라 관측을 객체, 공간적 관계, 표면, 행동유도성(Affordance), 작업 관련 장면 구조를 나타내는 압축된 시각 특징(Visual Feature)으로 변환한다. 현대적인 시스템에서는 사전학습된 비전 트랜스포머(Vision Transformer) 또는 비전-언어 인코더(Vision-Language Encoder)를 사용할 수 있으므로, 이전에 보지 못한 객체도 고정된 객체 클래스가 아니라 의미적 유사성(Semantic Similarity)을 통해 인식할 수 있다. 휴머노이드에서는 보행, 도달, 파지, 전신 상호작용이 기하학적 구조와 상대 자세(Relative Pose)에 직접 의존하므로 시각 부호화가 공간 관계에 민감해야 한다.
+
+언어 처리(Language Processing)는 인간의 목표와 로봇 행동을 연결하는 의미적 인터페이스(Semantic Interface)를 제공한다. 자연어 명령(Natural-Language Instruction)은 토큰화(Tokenization)되어 객체, 행동, 제약조건, 목적지, 작업 관계를 표현하는 표상으로 매핑된다. 모든 명령을 수작업으로 프로그래밍된 로봇 상태로 변환하는 대신, 일반화 정책(Generalist Policy)은 언어와 시연된 물리적 행동 사이의 관계를 학습한다. 따라서 언어는 공유된 정책 표현(Shared Policy Representation)으로부터 행동을 선택하거나 조합할 수 있는 유연한 조건 신호(Conditioning Signal)로 작동한다.
+
+다중모달 융합 단계(Multimodal Fusion Stage)는 비전(Vision), 언어(Language), 고유감각(Proprioception), 그리고 필요한 경우 힘(Force)이나 촉각(Tactile) 정보를 결합한다. 트랜스포머 기반 아키텍처(Transformer-Based Architecture)는 어텐션 메커니즘(Attention Mechanism)을 통해 서로 다른 모달리티에서 생성된 토큰 간 관계를 동적으로 형성할 수 있기 때문에 특히 적합하다. 특정 객체를 지칭하는 명령은 해당 시각 영역에 주의를 집중할 수 있으며, 예측되는 조작 행동은 동시에 팔 구성, 손 상태, 균형 상태, 최근 관측 이력에 의존할 수 있다.
+
+휴머노이드 작업은 일반적으로 하나의 관측만으로 해결할 수 없기 때문에 시간적 맥락(Temporal Context)이 필수적이다. 객체를 향해 걸어가고, 이를 파지하고, 운반한 후 다른 위치에 놓는 과정은 현재 행동이 이전의 관측과 행동에 의존하는 하나의 시퀀스(Sequence)를 구성한다. 따라서 VLA 모델은 관측 이력(Observation History), 순환 상태 표현(Recurrent State Representation), 또는 시간적으로 구성된 토큰 시퀀스(Temporally Organized Token Sequence)를 처리한다. 이를 통해 객체가 일시적으로 가려지거나 로봇의 시점이 변하는 경우에도 작업 진행 상태를 추론하고 행동의 연속성을 유지할 수 있다.
+
+행동 디코더(Action Decoder)는 학습된 다중모달 표현을 로봇 명령으로 변환한다. 아키텍처에 따라 출력은 이산 행동 토큰(Discrete Action Token), 연속 관절 목표(Continuous Joint Target), 말단장치 궤적(End-Effector Trajectory), 속도 명령(Velocity Command), 행동 청크(Action Chunk), 또는 하위 제어기가 해석하는 잠재 명령(Latent Command)이 될 수 있다. 휴머노이드 시스템에서는 보행, 조작, 자세, 손, 머리 동작이 균형, 접촉, 토크, 운동학적 제약조건을 만족하면서 동시에 작동해야 하므로 행동 공간 설계(Action-Space Design)가 특히 중요하다.
+
+실용적인 아키텍처에서는 고수준 학습 지능(High-Level Learned Intelligence)과 결정론적 실시간 안정화(Deterministic Real-Time Stabilization)를 분리한다. VLA 정책은 비교적 긴 시간 범위에서 어떤 움직임이나 기술을 실행해야 하는지를 결정하고, 전신 제어(Whole-Body Control), 임피던스 제어(Impedance Control), 보행 제어기(Locomotion Controller), 액추에이터 수준 제어 루프(Actuator-Level Control Loop)는 훨씬 높은 주파수에서 해당 명령을 실행한다. 이러한 분리는 대규모 신경망 정책이 밀리초 단위의 모든 안정화 결정을 담당하지 않도록 하며, 기존 제어 이론을 이용해 동역학적으로 실현 가능한 물리적 행동을 유지할 수 있게 한다.
+
+행동 청킹(Action Chunking)은 의미적 추론(Semantic Reasoning)과 연속 제어(Continuous Control)를 연결하는 또 다른 유용한 추상화 방법이다. 정책은 다음 순간의 단일 모터 명령만 예측하는 대신 의미 있는 시간 구간을 포함하는 짧은 연속 행동 시퀀스를 생성할 수 있다. 청크 기반 예측(Chunked Prediction)은 반복적인 추론 요구를 줄이고 조작 과정에서 시간적 일관성(Temporal Consistency)을 향상시킬 수 있다. 실행 계층(Execution Layer)은 이러한 명령을 모니터링하고 환경 상태가 예측된 행동 시퀀스가 가정한 상태에서 벗어나면 재계획(Replanning)을 요청할 수 있다.
+
+일반화 휴머노이드 정책(Generalist Humanoid Policy)은 많은 작업이 동일한 내부 표현(Internal Representation)과 행동 모델(Action Model)을 공유한다는 점에서 서로 분리된 작업별 정책(Task-Specific Policy)의 집합과 다르다. 파지, 운반, 열기, 배치, 도구 사용, 양손 조작(Bimanual Manipulation) 등의 행동을 이질적인 시연 데이터(Heterogeneous Demonstration Data)를 이용하여 하나의 모델에서 학습할 수 있다. 공유 표현은 한 작업에서 획득한 지식이 다른 작업에 영향을 줄 수 있도록 하며, 새로운 응용마다 별도의 인식 및 제어 파이프라인을 설계하지 않고도 조합적 일반화(Compositional Generalization)를 가능하게 한다.
+
+이러한 시스템을 학습하려면 관측, 명령, 로봇 상태, 행동을 포함하는 동기화된 궤적 데이터(Synchronized Trajectory Data)가 필요하다. 원격조작(Teleoperation)과 인간 시연(Human Demonstration)은 수작업으로 명시하기 어려운 전신 협응 행동(Whole-Body Coordinated Behavior)의 예제를 제공하기 때문에 특히 중요하다. 시뮬레이션(Simulation), 자율 롤아웃(Autonomous Rollout), 합성 변형(Synthetic Variation), 선별된 실제 환경 시연(Curated Real-World Demonstration)을 이용해 이러한 데이터셋을 보완할 수 있다. 더 넓은 소프트웨어 구조에서는 원격조작 데이터 수집, 다중 작업 정책(Multi-Task Policy), 언어 조건부 실행(Language-Conditioned Execution), 온보드 VLA 추론(Onboard VLA Inference)이 휴머노이드 VLA의 주요 구성요소로 배치된다.
+
+VLA 모델은 로봇의 안전 아키텍처(Safety Architecture)를 직접 대체해서는 안 된다. 예측된 행동은 관절 제한(Joint Limit), 작업공간 제약(Workspace Constraint), 충돌 조건(Collision Condition), 균형 여유도(Balance Margin), 접촉력(Contact Force), 속도 제한(Velocity Limit), 기타 플랫폼별 요구조건을 검사하는 검증 계층(Validation Layer)을 통과해야 한다. 안전 감독기(Safety Supervisor)는 위험한 명령을 거부하거나, 요청된 움직임을 수정하거나, 실행을 중지하거나, 제어 권한을 폴백 제어기(Fallback Controller)로 이전할 수 있다. 따라서 학습 기반 자율성(Learned Autonomy)은 독립적으로 시험하고 검증할 수 있는 결정론적 메커니즘(Deterministic Mechanism)에 의해 제한된다.
+
+온보드 배포(Onboard Deployment)는 모델의 능력과 실시간 실행 가능성(Real-Time Feasibility) 사이에 추가적인 아키텍처 경계를 만든다. 대규모 다중모달 모델(Large Multimodal Model)은 상당한 GPU 또는 가속기 자원을 요구하는 반면, 휴머노이드 제어 시스템은 예측 가능한 지연시간(Latency)을 유지해야 한다. 실용적인 구현에서는 고주파 제어 컴퓨터(High-Rate Control Computer)와 AI 추론 컴퓨터(AI Inference Computer)를 분리하고, 제어된 인터페이스를 통해 압축된 관측, 명령, 상태 정보를 교환할 수 있다. 이러한 구성은 실시간 제어 컴퓨팅과 AI 추론 컴퓨팅을 구분하는 전체 휴머노이드 시스템 아키텍처와 일치한다.
+
+추론 지연시간(Inference Latency)은 정책이 변화하는 물리적 세계와 상호작용하는 방식도 결정한다. 인식, 추론, 행동 생성에 지나치게 많은 시간이 필요하면 로봇은 이미 오래된 관측에 기반하여 행동할 수 있다. 따라서 효율적인 비전 인코더, 토큰 수 감소(Token Reduction), 양자화 모델(Quantized Model), 캐시된 표현(Cached Representation), 행동 청킹, 비동기 실행(Asynchronous Execution)은 모델 정확도만큼 중요할 수 있다. 빠른 반사적 제어기(Reflexive Controller)는 로컬에서 계속 동작하고, 상대적으로 느린 의미적 추론은 새로운 의사결정이 필요할 때 목표나 행동 구간을 갱신한다.
+
+따라서 완전한 휴머노이드 VLA 아키텍처는 의미적 지능(Semantic Intelligence)과 물리적 실행(Physical Execution)을 연결하는 계층적 구조(Hierarchy)로 볼 수 있다. 다중모달 센서가 환경과 신체 상태를 기술하고, 표현 모델(Representation Model)이 관측을 공유 잠재 상태(Shared Latent State)로 변환하며, 언어가 작업 의도를 제공하고, 일반화 정책이 협응된 행동을 예측하며, 기존 제어 계층이 이러한 행동을 실제 플랫폼에서 구현한다. 피드백(Feedback)은 새로운 시각, 고유감각, 힘, 실행 정보를 지속적으로 정책으로 되돌려 보낸다.
+
+이러한 폐루프 구조(Closed-Loop Organization)는 VLA 모델을 수동적인 다중모달 예측기(Passive Multimodal Predictor)에서 체화 정책(Embodied Policy)으로 변화시킨다. 생성된 모든 행동은 물리적 환경을 변화시키며, 그 결과 이후 의사결정에 사용되는 관측도 변화한다. 성공적인 동작을 위해서는 장면을 인식하거나 언어를 이해하는 능력뿐 아니라 불확실성, 외란(Disturbance), 부분 관측성(Partial Observability), 접촉 이벤트(Contact Event), 실행 오류(Execution Error)가 존재하는 상황에서도 안정적인 인식-행동 피드백(Perception-Action Feedback)을 유지해야 한다. 로봇은 지속적으로 관측하고, 추론하고, 행동하고, 결과를 평가한 후 다음 행동을 조정해야 한다.
+
+궁극적으로 휴머노이드 VLA 시스템은 일반적인 의미 명령(General Semantic Command)과 협응된 물리적 행동(Coordinated Physical Behavior)을 연결하는 지능적 가교(Intelligence Bridge)를 제공한다. 이 아키텍처는 파운데이션 모델 표현(Foundation-Model Representation)을 로봇 고유의 상태, 행동, 제어, 안전 인터페이스와 결합하며, 파운데이션 모델 자체를 로봇의 전체 제어기로 간주하지 않는다. 이러한 계층적 설계(Layered Design)는 휴머노이드가 작업 간 학습 지식을 재사용하면서도 신뢰성 있는 실제 배포에 필요한 결정론적 제어, 모니터링, 안전 메커니즘을 유지할 수 있는 실용적인 경로를 제공한다.
+
+## 08.02. Full Body Action Space for Humanoid VLA [w/Code]
+
+![](images/image2.png){width="7.268055555555556in" height="7.268055555555556in"}
+
+전신 행동 공간(Full-Body Action Space)은 휴머노이드 비전-언어-행동 모델(Vision-Language-Action Model)이 로봇 전체에 걸친 물리적 행동을 표현하고 생성하는 방식을 정의한다. 주로 하나의 말단장치(End-Effector)를 통해 행동을 기술할 수 있는 고정형 매니퓰레이터(Fixed Manipulator)와 달리, 휴머노이드는 다리, 몸통, 팔, 손, 머리 및 접촉(Contact)을 협응해야 한다. 따라서 행동 표현(Action Representation)은 일반화 정책 추론(Generalist Policy Inference)을 보행(Locomotion), 조작(Manipulation), 자세 조절(Posture Regulation), 전신 제어(Whole-Body Control)와 연결하는 핵심 인터페이스가 된다.
+
+가장 직접적인 행동 표현은 로봇의 구동 자유도(Actuated Degrees of Freedom)를 포괄하는 관절 공간 명령(Joint-Space Command)을 사용한다. 정책은 관절 위치(Joint Position), 위치 증분(Position Increment), 속도(Velocity), 토크(Torque), 또는 이들의 조합을 예측할 수 있다. 관절 공간 표현은 실제 기구와 직접적으로 연결된다는 장점이 있지만, 정교한 손(Dexterous Hand)을 가진 휴머노이드에서는 차원이 급격히 증가한다. 또한 의미적으로 단순한 작업도 많은 관절의 협응된 변화를 요구할 수 있기 때문에 학습이 어려워질 수 있다.
+
+작업 공간 행동(Task-Space Action)은 물리적으로 의미 있는 변수로 원하는 움직임을 표현하는 보다 구조화된 대안을 제공한다. VLA 정책은 모든 관절을 직접 제어하는 대신 왼손, 오른손, 골반(Pelvis), 몸통(Torso), 머리 또는 발에 대한 목표 자세(Target Pose)나 자세 증분(Pose Increment)을 예측할 수 있다. 이후 하위 역기구학(Inverse Kinematics) 또는 전신 제어기(Whole-Body Controller)가 운동학적 제한, 접촉, 균형 요구조건, 충돌 제약조건을 만족하면서 이러한 목표를 실행 가능한 관절 명령으로 변환한다.
+
+휴머노이드 행동에서는 보행(Locomotion)과 조작(Manipulation)이 동일한 행동 표현 안에서 수행되어야 하는 경우가 많다. 객체에 도달하려면 먼저 객체를 향해 걷고, 골반의 위치를 조정하고, 몸통을 회전시키고, 팔을 뻗은 다음 최종적으로 손을 제어해야 할 수 있다. 이러한 행동을 서로 관련 없는 정책으로 처리하면 전환 경계(Transition Boundary)를 다루기 어려워진다. 통합 전신 행동 공간(Unified Full-Body Action Space)은 이동성과 조작을 하나의 물리적 목표를 구성하는 요소로 표현하는 협응된 이동-조작 행동(Coordinated Loco-Manipulation Behavior)을 가능하게 한다.
+
+부동 베이스 상태(Floating-Base State)는 휴머노이드와 고정 베이스 조작(Fixed-Base Manipulation)을 구별하는 중요한 요소이다. 로봇의 베이스(Base)는 환경에 강체로 고정되어 있지 않으며, 위치와 방향은 발이나 다른 지지 표면에서 생성되는 접촉력(Contact Force)을 통해 변화한다. 따라서 VLA 정책은 베이스 움직임을 일반적인 독립 구동 변수처럼 취급할 수 없다. 원하는 베이스 변위(Base Displacement)는 궁극적으로 동역학적으로 실현 가능한 접촉 전환(Contact Transition), 스테핑 동작(Stepping Motion), 운동량 조절(Momentum Regulation), 전신 제어를 통해 구현되어야 한다.
+
+따라서 접촉(Contact)은 행동 공간 의미론(Action-Space Semantics)의 일부가 된다. 휴머노이드 작업에서는 발, 손, 무릎 또는 기타 신체 부위를 이용하여 접촉을 생성하고, 유지하고, 해제해야 한다. 행동 표현에는 명시적인 접촉 상태(Contact State), 예측된 접촉 일정(Contact Schedule), 지지발 선택(Support-Foot Selection), 또는 시연으로부터 학습된 암시적 접촉 행동(Implicit Contact Behavior)이 포함될 수 있다. 올바른 접촉 추론(Contact Reasoning)은 필수적인데, 필요한 지지 구성이 확보되지 않으면 기하학적으로 타당해 보이는 움직임도 물리적으로 실행 불가능할 수 있기 때문이다.
+
+손은 행동 공간의 차원을 크게 증가시키는 또 다른 요소이다. 정교한 휴머노이드(Dexterous Humanoid)는 독립적으로 제어되는 여러 손가락 관절을 가질 수 있으므로 직접적인 전신 예측은 계산 비용이 높고 통계적으로도 학습하기 어려울 수 있다. 실용적인 VLA 아키텍처에서는 축소 좌표(Reduced Coordinate), 파지 프리미티브(Grasp Primitive), 시너지(Synergy), 잠재 손 상태(Latent Hand State), 또는 낮은 주파수의 손가락 명령을 통해 손의 행동을 표현할 수 있다. 이러한 추상화는 유용한 손의 기민성(Dexterity)을 유지하면서 손가락 수준 제어가 고수준 행동 표현을 지나치게 복잡하게 만드는 것을 방지한다.
+
+시간적 추상화(Temporal Abstraction) 역시 전신 행동 생성에서 중요하다. VLA 모델은 각 추론 단계마다 하나의 순간적인 명령만 예측하는 대신 미래 목표의 시퀀스를 포함하는 행동 청크(Action Chunk)를 생성할 수 있다. 하나의 청크는 여러 개의 팔 경유점(Arm Waypoint), 협응된 신체 움직임 또는 짧은 조작 구간을 나타낼 수 있다. 이러한 접근 방식은 더 부드러운 시간적 구조를 제공하고 추론 주파수를 낮추는 동시에, 하위 제어 시스템이 정책 업데이트 사이에서 움직임을 보간(Interpolation)하고 안정화할 수 있도록 한다.
+
+서로 다른 로봇 변수가 하나의 학습 아키텍처를 공유하는 경우 행동 정규화(Action Normalization)가 필요하다. 관절 각도, 카테시안 위치(Cartesian Position), 회전(Rotation), 속도, 그리퍼 상태(Gripper State), 접촉 지표(Contact Indicator)는 서로 다른 수치 범위와 물리 단위를 가진다. 이러한 변수를 비교 가능한 표현으로 정규화하면 학습을 보다 안정적으로 수행할 수 있다. 작은 표현 불일치도 물리적으로 큰 실행 오류를 발생시킬 수 있으므로 데이터셋 구축, 학습, 추론, 배포 과정에서 동일한 정규화 절차를 일관되게 유지해야 한다.
+
+회전(Rotation)은 방향(Orientation)을 일반적인 유클리드 좌표(Euclidean Coordinate)처럼 항상 처리할 수 없기 때문에 특히 주의해야 한다. 오일러 각(Euler Angle)은 불연속성과 특이점(Singularity)을 발생시킬 수 있으며, 쿼터니언(Quaternion)은 정규화가 필요하고 서로 동등한 표현이 존재한다. 학습 아키텍처에 따라 회전 행렬(Rotation Matrix) 또는 연속 회전 표현(Continuous Rotation Representation)을 대안으로 사용할 수 있다. 선택된 표현은 안정적인 최적화(Optimization)를 지원하면서 휴머노이드에 사용되는 하위 운동학 및 전신 제어 프레임워크와 호환되어야 한다.
+
+일반화 정책(Generalist Policy)은 의미적 행동 의도(Semantic Action Intent)와 고주파 액추에이터 실행(High-Frequency Actuator Execution)을 분리함으로써 추가적인 이점을 얻을 수 있다. VLA 계층은 손 변위, 신체 움직임, 파지 상태, 보행 방향과 같은 목표를 예측하고, 전신 제어기가 세부적인 협응 문제를 해결할 수 있다. 작업 공간 제어(Operational-Space Control), 계층적 최적화(Hierarchical Optimization), 전신 이차계획법(Whole-Body Quadratic Programming)은 학습된 정책 아래에서 작업 우선순위와 물리적 제약조건을 강제할 수 있다.
+
+계층적 행동 공간(Hierarchical Action Space)은 시간적·물리적 규모에 따라 의사결정을 더욱 세분화할 수 있다. 상위 계층은 내비게이션(Navigation), 도달(Reaching), 파지(Grasping), 운반(Carrying), 배치(Placement) 목표를 선택하고, 중간 정책(Intermediate Policy)은 협응된 전신 참조값(Full-Body Reference)을 생성할 수 있다. 빠른 제어기는 관절 토크, 임피던스(Impedance), 접촉력, 균형을 조절한다. 이러한 계층 구조는 종단간 학습(End-to-End Learning)을 제거하는 것이 아니라, 학습 기반 일반화와 안정적인 물리적 실행에 필요한 결정론적 메커니즘이 공존할 수 있는 인터페이스를 정의한다.
+
+행동 공간은 또한 양손 협응(Bimanual Coordination)을 수용해야 한다. 인간 중심 환경의 많은 작업에서는 한 손으로 객체를 안정화하면서 다른 손으로 조작하거나, 두 손을 사용하여 큰 물체를 운반해야 한다. 정책이 두 팔의 공통된 목표를 이해하지 못하면 독립적인 왼팔 및 오른팔 명령이 서로 충돌하는 움직임을 생성할 수 있다. 결합 행동 표현(Coupled Action Representation)을 사용하면 두 말단장치, 몸통 구성, 지지 자세를 하나의 협응된 행동을 구성하는 요소로 함께 생성할 수 있다.
+
+전신 행동(Whole-Body Action)은 균형(Balance)과 운동량(Momentum)의 제약을 받는다. 무거운 객체를 이동하거나, 두 팔을 뻗거나, 몸통을 가속하면 전체 로봇-객체 시스템(Robot-Object System)의 질량중심(Center of Mass)과 각운동량(Angular Momentum)이 변화한다. 정책은 시연을 통해 이러한 관계의 일부를 학습할 수 있지만, 실제 실행은 여전히 균형 인식 제어(Balance-Aware Control)의 감독을 받아야 한다. 원하는 행동이 지지, 마찰, 토크, 운동량 또는 안정성 제약을 위반하면 실행 가능한 영역(Feasible Region)으로 투영하거나 수정할 수 있다.
+
+따라서 안전 필터링(Safety Filtering)은 학습된 행동 공간의 최종 경계를 형성한다. 명령이 실제 로봇에 전달되기 전에 시스템은 관절 제한, 자기 충돌(Self-Collision), 환경 충돌(Environmental Collision), 속도 및 가속도 제한, 액추에이터 성능, 접촉 실행 가능성(Contact Feasibility), 안정성 조건을 평가해야 한다. 안전하지 않은 예측은 제한(Clipping), 투영(Projection), 거부 또는 사전에 정의된 폴백 행동(Fallback Behavior)으로 대체할 수 있다. 이를 통해 안전 핵심 액추에이터 명령에 무제한적인 권한을 부여하지 않으면서도 표현력이 높은 학습 정책을 사용할 수 있다.
+
+플랫폼 간 일반화(Cross-Platform Generalization)는 휴머노이드마다 형태(Morphology), 관절 수, 팔다리 비율, 액추에이터 제한, 손 설계가 다르기 때문에 추가적인 과제를 만든다. 한 로봇에서 학습된 원시 관절 벡터(Raw Joint Vector)는 다른 로봇을 자동으로 제어할 수 없다. 보다 전이 가능한 행동 표현(Transferable Action Representation)은 체화체 설명자(Embodiment Descriptor), 정규화된 작업 공간 목표(Normalized Task-Space Target), 의미적 신체 부위 정의(Semantic Body-Part Definition), 또는 로봇별 행동 어댑터(Robot-Specific Action Adapter)를 사용할 수 있다. 이를 통해 일반화 모델은 고수준 행동 지식을 공유하고 체화체별 계층은 예측 결과를 각 플랫폼에 적합한 명령으로 변환할 수 있다.
+
+학습 데이터(Training Data)는 추론 과정에서 요구되는 것과 동일한 행동 의미론(Action Semantics)을 사용해야 한다. 따라서 원격조작 궤적(Teleoperation Trajectory), 모션 캡처 리타기팅(Motion-Capture Retargeting), 시뮬레이션 시연(Simulation Demonstration), 자율 롤아웃(Autonomous Rollout), 인간 생성 예제는 모델 학습 전에 표준 행동 표현(Canonical Action Representation)으로 변환되어야 한다. 이미지, 고유감각, 언어, 행동 사이의 정확한 타임스탬프(Timestamp)와 동기화(Synchronization)는 특히 중요하다. 시간적 정렬이 잘못되면 모델이 관측된 사건과 이를 발생시킨 움직임 사이의 잘못된 관계를 학습할 수 있기 때문이다.
+
+전신 행동 공간은 궁극적으로 휴머노이드 VLA 모델이 무엇을 학습하고 표현할 수 있는지를 결정한다. 지나치게 저수준의 표현은 어려운 고차원 예측 문제(High-Dimensional Prediction Problem)를 만들고, 지나치게 추상적인 표현은 정책이 휴머노이드 신체의 물리적 다양성과 유연성을 충분히 활용하지 못하게 할 수 있다. 따라서 효과적인 시스템은 의미적으로 유용한 행동 변수와 체화체 인식 제어 인터페이스(Embodiment-Aware Control Interface), 시간적 추상화, 접촉 추론, 결정론적 실행 가능성 제약(Deterministic Feasibility Constraint)을 결합한다.
+
+잘 설계된 전신 행동 공간은 파운데이션 모델(Foundation Model)이 모든 액추에이터 수준 문제를 직접 해결하도록 요구하지 않으면서 언어 조건부 의도(Language-Conditioned Intent)를 협응된 물리적 행동으로 변환한다. 이는 다중모달 추론(Multimodal Reasoning)에서 보행, 도달, 파지, 양손 조작, 자세 조정, 접촉 상호작용(Contact Interaction)으로 이어지는 구조화된 가교를 제공한다. 이러한 인터페이스를 통해 VLA 정책은 다양한 작업에서 일반성을 유지하면서 특화된 실시간 제어기가 실제 물리적 실행 과정의 균형, 동역학적 실행 가능성(Dynamic Feasibility), 정밀도 및 안전성을 보장하도록 할 수 있다.
+
+## 08.03. GR00T N1 Foundation Model Architecture [w/Code]
+
+![](images/image3.png){width="7.268055555555556in" height="7.268055555555556in"}
+
+GR00T N1은 다중모달 이해(Multimodal Understanding)와 연속적인 물리 행동 생성(Continuous Physical Action Generation)을 연결하여 범용 휴머노이드 로봇 행동(General-Purpose Humanoid Robot Behavior)을 지원하도록 설계된 파운데이션 모델 아키텍처(Foundation Model Architecture)이다. 휴머노이드 VLA 스택(VLA Stack)에서 이는 개별적으로 학습된 작업 정책(Task Policy)에서 벗어나 시각 관측, 언어 명령, 로봇 상태를 해석하면서 조작과 체화 상호작용 작업(Embodied Interaction Task)에 적용할 수 있는 행동을 생성하는 공유 모델(Shared Model)로의 전환을 의미한다.
+
+핵심적인 아키텍처 개념은 의미적 추론(Semantic Reasoning)과 정밀한 모터 행동 생성(Precise Motor Generation)을 분리하는 것이다. 고수준 추론은 로봇이 무엇을 관측하고 있는지, 명령이 무엇을 의미하는지, 장면의 어떤 요소가 요청된 작업과 관련되는지를 이해해야 한다. 이후 모터 행동 생성은 이러한 이해를 시간적으로 일관된 연속 행동으로 변환해야 한다. 이러한 기능 분리는 대규모 사전학습 표현(Large Pretrained Representation)이 모든 저수준 제어 세부사항을 동일한 신경망 경로에서 해결하지 않고도 의미적 지식을 제공할 수 있도록 한다.
+
+의미적 구성요소(Semantic Component)는 자연어 명령(Natural-Language Command), 카메라 관측(Camera Observation), 작업 관련 시각 정보와 같은 다중모달 맥락(Multimodal Context)을 처리한다. 비전-언어 표현(Vision-Language Representation)은 객체, 관계, 행동유도성(Affordance), 명령에 관한 지식을 제공하여 모델이 언어적 개념을 물리적 장면의 요소와 연결할 수 있도록 한다. 휴머노이드에서는 집기, 배치, 전달, 객체 재배치와 같은 명령이 궁극적으로 특정 객체와 공간 관계를 참조해야 하므로 이러한 그라운딩(Grounding)이 중요하다.
+
+로봇 상태 정보(Robot State Information)는 현재 체화체 구성(Embodiment Configuration)을 기술함으로써 비전과 언어 정보를 보완한다. 관절 위치(Joint Position), 말단장치 상태(End-Effector State), 손 구성(Hand Configuration), 기타 고유감각 변수(Proprioceptive Variable)는 현재 상태에서 어떤 행동이 물리적으로 적절한지를 나타낸다. 따라서 이 아키텍처는 시각적 이해만으로 행동을 결정하는 것이 아니라 외부 관측과 내부 로봇 상태를 함께 고려한다. 이러한 결합은 다중모달 의미 표현을 체화체 조건부 물리적 의사결정(Embodiment-Conditioned Physical Decision)으로 변환한다.
+
+GR00T N1은 상대적으로 느린 의미 처리(Semantic Processing)와 빠른 행동 생성(Action Generation)이 상호보완적인 역할을 수행하는 이중 시스템 관점(Dual-System Perspective)을 사용한다. 추론 경로(Reasoning Pathway)는 작업과 환경을 기술하는 맥락 표현(Contextual Representation)을 제공하고, 행동 경로(Action Pathway)는 이러한 맥락을 조건으로 연속적인 로봇 행동을 생성한다. 이는 숙고적 지능(Deliberative Intelligence)과 빠른 감각운동 실행(Sensorimotor Execution)을 결합하는 광범위한 원리와 유사하지만, 두 구성요소 모두 학습된 파운데이션 모델 프레임워크 안에서 통합된다.
+
+행동 생성 구성요소(Action-Generation Component)는 일반적인 텍스트 토큰 예측(Text-Token Prediction)이 아니라 연속 제어(Continuous Control)를 위해 설계된다. 물리적 로봇 궤적은 관절 간 그리고 시간축에 걸쳐 강하게 상관된 값을 포함하므로, 행동을 예측하려면 연속적인 다차원 신호(Continuous Multidimensional Signal)에 적합한 표현이 필요하다. 흐름 기반 행동 생성(Flow-Based Action Generation)은 초기의 단순한 행동 분포를 다중모달 맥락, 시연, 현재 로봇 상태에 부합하는 궤적으로 변환하는 메커니즘을 제공한다.
+
+흐름 정합(Flow Matching)은 잡음이 포함된 행동 샘플을 구조화된 로봇 행동으로 점진적으로 변환하는 벡터장(Vector Field)을 학습하는 것으로 해석할 수 있다. 학습 과정에서 모델은 특정 관측과 명령이 주어졌을 때 행동 궤적이 시연된 행동을 향해 어떻게 변화해야 하는지를 학습한다. 추론 과정에서는 미리 정의된 소규모 행동 어휘(Action Vocabulary)에서 행동을 선택하는 대신 학습된 변환을 통해 연속적인 행동 시퀀스를 생성한다. 이는 정밀한 궤적에 상당한 연속적 변화가 존재하는 조작 작업에서 특히 유용하다.
+
+생성된 행동 출력은 자연스럽게 행동 청킹(Action Chunking)과 결합할 수 있다. 하나의 제어값만 생성하고 즉시 전체 파운데이션 모델 추론 과정을 반복하는 대신, 정책은 짧은 시간 범위에 해당하는 협응된 미래 행동을 예측할 수 있다. 행동 청크(Action Chunk)는 연속적인 움직임 사이의 시간적 관계를 유지하고 실질적인 추론 부담을 감소시킨다. 로봇은 예측된 시퀀스의 일부를 실행하는 동시에 이후의 관측과 정책 업데이트를 준비할 수 있다.
+
+휴머노이드에서 행동 표현(Action Representation)은 학습 구성과 대상 플랫폼에 따라 팔, 손, 몸통 또는 기타 체화체별 변수(Embodiment-Specific Variable)의 협응된 정보를 포함할 수 있다. 파운데이션 모델이 로봇별 인터페이스(Robot-Specific Interface)를 제거한다고 해석해서는 안 된다. 휴머노이드마다 운동학(Kinematics), 관절 구성, 액추에이터 제한, 센싱 구성, 제어 규약이 다르기 때문에 공유된 학습 능력을 실제 플랫폼으로 전이할 때 적응 계층(Adaptation Layer)과 체화체별 전처리(Embodiment-Specific Preprocessing)가 여전히 중요하다.
+
+일반화 휴머노이드 모델(Generalist Humanoid Model)을 학습하려면 하나의 좁게 정의된 데이터셋이 아니라 이질적인 로봇 경험(Heterogeneous Robot Experience)이 필요하다. 시연 데이터는 원격조작(Teleoperation), 로봇 호환 궤적으로 변환된 인간 시연(Human Demonstration), 시뮬레이션(Simulation), 기존 로봇 데이터셋, 플랫폼별 데이터 수집으로부터 얻을 수 있다. 다양한 경험을 결합하는 목적은 모델을 객체, 환경, 명령, 체화체, 작업 시퀀스의 변화에 노출하여 개별 시연을 넘어서는 공유 행동 구조(Shared Behavioral Structure)를 형성하도록 하는 것이다.
+
+여러 로봇의 데이터를 파운데이션 모델 학습에 사용하는 경우 데이터 표준화(Data Standardization)가 매우 중요하다. 카메라 배치, 제어 주기, 행동 차원, 좌표계(Coordinate Frame), 관절 규약, 에피소드 형식(Episode Format)은 플랫폼마다 크게 다를 수 있다. 따라서 학습 파이프라인은 필요한 경우 체화체별 정보를 보존하면서 관측과 행동을 모델 호환 표현(Model-Compatible Representation)으로 정렬하는 변환 과정을 필요로 한다. 정렬이 잘못되면 데이터 규모가 크더라도 실제 학습 유용성이 감소할 수 있다.
+
+시뮬레이션과 합성 데이터(Synthetic Data)는 모델이 경험할 수 있는 데이터 분포를 확장할 수 있다. 휴머노이드는 모든 사례를 실제 하드웨어에서 수작업으로 수집하지 않고도 객체 위치, 조명, 장면 구성, 카메라 시점, 작업 구성의 다양한 변화를 경험할 수 있다. 또한 시뮬레이션은 어렵거나 드물게 발생하는 상황을 반복적으로 생성할 수 있다. 그러나 접촉 행동, 센서 특성, 액추에이터 응답, 환경 불확실성을 완벽하게 재현하기 어렵기 때문에 실제 환경 시연(Real-World Demonstration)은 여전히 필요하다.
+
+파운데이션 모델 접근법의 또 다른 중요한 능력은 광범위한 사전학습(Broad Pretraining)으로부터 플랫폼별 적응(Platform-Specific Adaptation)으로의 전이이다. 사전학습된 모델은 일반적인 비전-언어 이해와 재사용 가능한 조작 지식을 제공할 수 있으며, 이후 상대적으로 작은 적응 단계를 통해 특정 휴머노이드, 센서 구성, 행동 표현 또는 운영 도메인에 정책을 특화할 수 있다. 이를 통해 새로운 로봇 플랫폼이나 응용 분야가 도입될 때마다 모든 행동을 처음부터 다시 학습해야 하는 부담을 줄일 수 있다.
+
+후속학습(Post-Training)은 광범위한 사전학습 분포에서 충분히 표현되지 않은 행동에 모델을 추가로 적응시킬 수 있다. 제조용 휴머노이드(Manufacturing Humanoid)는 반복적인 삽입, 핸들링, 도구 상호작용이 필요할 수 있으며, 물류용 휴머노이드(Logistics Humanoid)는 집기, 운반, 분류, 배치를 중점적으로 수행할 수 있다. 따라서 적절한 시연과 적응 절차가 제공된다면 동일한 파운데이션 표현(Foundation Representation)을 서로 다른 운영 프로파일(Operational Profile)에 활용할 수 있지만, 성공적인 전이는 여전히 대상 물리 행동을 충분히 포함하는 데이터에 의존한다.
+
+이 아키텍처는 기존의 휴머노이드 제어(Conventional Humanoid Control)와 지속적으로 연결되어야 한다. 파운데이션 모델 출력은 일반적으로 가장 빠른 액추에이터 제어 루프보다 상위 계층에서 동작하며, 실시간 제어기(Real-Time Controller)는 관절 움직임, 임피던스(Impedance), 균형, 접촉을 조절한다. 전신 제어(Whole-Body Control)는 학습된 행동 참조값을 동역학적으로 실행 가능한 명령으로 변환하고 조작, 자세, 지지 요구조건 사이의 충돌을 해결할 수 있다. 이를 통해 의미적 지능과 모터 학습이 결정론적 시간 제약으로 실행되어야 하는 메커니즘을 대체하지 않도록 한다.
+
+안전(Safety) 역시 제한 없는 정책 권한 밖에 존재해야 한다. 생성된 행동은 관절 제한, 충돌 제약, 작업공간 경계, 속도 제한, 힘 제한, 균형 조건, 운영 안전 규칙에 따라 검사되어야 한다. 학습된 정책이 유효하지 않은 행동을 제안하면 감독 계층(Supervisory Layer)이 이를 수정하거나 거부하거나 실행을 종료할 수 있다. 따라서 파운데이션 모델의 일반성(Generality)은 휴머노이드의 행동 범위(Behavioral Envelope)를 확장하지만 결정론적 안전 강제(Deterministic Safety Enforcement)의 필요성을 제거하지 않는다.
+
+온보드 추론(Onboard Inference)은 모델 크기, 메모리 대역폭(Memory Bandwidth), 가속기 활용률(Accelerator Utilization), 지연시간(Latency)에 현실적인 제약을 부여한다. 의미 처리는 상당한 계산량을 요구할 수 있지만 물리적 상호작용에서는 환경 변화에 적시에 대응해야 한다. 효율적인 배포에서는 최적화된 추론 엔진(Inference Engine), 저정밀도 연산(Reduced Precision), 캐시된 다중모달 특징(Cached Multimodal Feature), 비동기 파이프라인(Asynchronous Pipeline), 행동 청크를 사용할 수 있다. 시스템 아키텍처는 모델 능력과 로봇이 물리적 세계를 지속적으로 인식하고 대응해야 한다는 요구조건 사이에서 균형을 유지해야 한다.
+
+이중 시스템 구조(Dual-System Structure)는 의미적 추론과 행동 생성이 반드시 동일한 업데이트 주기(Update Frequency)를 요구하지 않는다는 점에서 유용하다. 장면 해석과 언어 맥락은 여러 제어 주기 동안 안정적으로 유지될 수 있지만 모터 행동은 더 빈번한 갱신을 요구한다. 의미 표현을 재사용하면서 짧은 행동 구간을 반복적으로 생성하거나 실행하면 불필요한 계산을 줄이고 대규모 다중모달 지능과 실시간 로봇 행동 사이에 보다 실용적인 인터페이스를 제공할 수 있다.
+
+평가(Evaluation)는 모델이 단순히 시연 궤적을 재현하는지 여부를 넘어 이루어져야 한다. 일반화 휴머노이드 정책은 작업 성공률(Task Success), 변화된 객체 위치에 대한 강건성(Robustness), 새로운 명령에 대한 대응, 실행 편차로부터의 복구, 시간적 일관성, 환경 간 전이 능력을 기준으로 시험해야 한다. 일반성이 증가하면 예상하지 못한 모델 행동이 발생할 수 있는 상황의 범위도 확대되므로 안전 위반(Safety Violation)과 실패 모드(Failure Mode) 역시 명시적으로 측정해야 한다.
+
+따라서 GR00T N1은 휴머노이드 VLA 시스템의 중요한 발전 방향을 보여준다. 의미적 다중모달 지능(Semantic Multimodal Intelligence)과 연속 행동 생성(Continuous Action Generation)을 재사용 가능한 로봇 파운데이션 모델(Robot Foundation Model)의 상호보완적 구성요소로 학습할 수 있다. 이 아키텍처는 비전, 언어, 고유감각 맥락(Proprioceptive Context)으로부터 시간적으로 구조화된 물리적 행동으로 이어지는 경로를 제공하면서 체화체 적응, 실시간 제어, 안전 감독을 위한 인터페이스를 유지한다.
+
+보다 광범위한 휴머노이드 소프트웨어 스택(Humanoid Software Stack)에서 이러한 파운데이션 모델은 전체 제어 시스템 자체가 아니라 학습된 일반화 정책 계층(Learned Generalist Policy Layer)으로 기능한다. 인식(Perception)은 다중모달 관측을 제공하고, 파운데이션 모델은 맥락을 해석하여 행동을 생성하며, 전신 제어기는 물리적 실행 가능성(Physical Feasibility)을 강제하고, 안전 메커니즘은 실행을 감독한다. 이러한 계층적 통합(Layered Integration)은 광범위한 학습 능력과 신뢰성 있는 휴머노이드 운용에 필요한 결정론적 제어 인프라(Deterministic Control Infrastructure)가 공존할 수 있도록 한다.
+
+## 08.04. Pi0 Flow Policy for Humanoid Tasks [w/Code]
+
+![](images/image4.png){width="7.268055555555556in" height="7.268055555555556in"}
+
+Pi0는 다중모달 관측(Multimodal Observation)과 자연어 명령(Natural-Language Instruction)을 연속적인 로봇 행동(Continuous Robot Action)으로 변환하도록 설계된 비전-언어-행동 정책 아키텍처(Vision-Language-Action Policy Architecture)이다. 휴머노이드 로보틱스(Humanoid Robotics)에서 Pi0의 중요성은 조작(Manipulation)을 개별적으로 프로그래밍된 기술들의 집합이 아니라 일반적인 조건부 생성 문제(Conditional Generation Problem)로 다룬다는 데 있다. 시각 관측은 물리적 장면을 설명하고, 언어는 의도된 작업을 지정하며, 로봇 상태는 협응된 행동을 생성하기 위한 체화체 맥락(Embodiment Context)을 제공한다.
+
+Pi0의 핵심적인 특징은 연속 행동 생성(Continuous Action Generation)을 위해 흐름 정합(Flow Matching)을 사용한다는 점이다. 기존의 자기회귀 모델(Autoregressive Model)은 행동을 이산 토큰(Discrete Token)으로 표현하고 순차적으로 예측하는 경우가 많지만, 실제 로봇 명령은 본질적으로 연속적이고 고차원적인 공간에 존재한다. 흐름 정합은 단순한 잡음 분포(Noisy Distribution)에서 현재의 시각, 언어, 고유감각 맥락(Proprioceptive Context)에 따른 시연 로봇 행동과 유사한 행동 궤적으로 이어지는 연속적인 변환을 학습한다.
+
+흐름 모델(Flow Model)은 가능한 행동 궤적 공간에서 벡터장(Velocity Field)을 학습하는 것으로 이해할 수 있다. 학습 과정에서는 잡음이 포함된 행동 샘플과 목표 시연(Target Demonstration)을 연결하고, 네트워크는 이러한 샘플이 유효한 행동에 접근하기 위해 어느 방향으로 변화해야 하는지를 학습한다. 추론 과정에서는 수치 적분(Numerical Integration)을 통해 학습된 흐름장을 따라 잡음에서 구조화된 행동 시퀀스로 이동한다. 이러한 방식은 모든 모터 변수를 이산적인 행동 어휘(Action Vocabulary)로 변환하지 않고도 복잡한 연속 행동을 모델링할 수 있도록 한다.
+
+이러한 특성은 행동 공간(Action Space)이 다수의 연속값 변수를 포함할 수 있는 휴머노이드에 특히 중요하다. 팔 관절, 손목 방향, 손 구성, 몸통 움직임, 기타 제어 변수는 부드럽고 일관되게 변화해야 한다. 이러한 변수를 지나치게 이산화하면 정밀도가 감소할 수 있으며, 각 값을 독립적으로 예측하면 중요한 상관관계를 무시할 수 있다. 흐름 기반 정책(Flow-Based Policy)은 여러 행동 차원과 여러 미래 시간 단계에 걸친 결합 분포(Joint Distribution)를 표현할 수 있다.
+
+Pi0는 사전학습된 비전-언어 표현(Pretrained Vision-Language Representation)과 물리적 제어에 특화된 행동 생성 전문가(Action-Generating Expert)를 결합한다. 비전-언어 구성요소는 객체, 장면 관계, 명령과 관련된 의미 특징(Semantic Feature)을 제공하고, 행동 구성요소는 이러한 특징을 조건으로 로봇 움직임을 생성한다. 이러한 분리는 대규모 다중모달 사전학습(Multimodal Pretraining)의 지식이 물리적 작업에 활용될 수 있도록 하면서, 행동 경로가 텍스트 생성이 아니라 연속 제어에 특화되도록 한다.
+
+시각 관측(Visual Observation)은 객체, 기하학적 구조, 작업 진행 상태, 환경 변화에 관한 정보를 정책에 제공한다. 사용 가능한 경우 다중 카메라 시점(Multiple Camera View)을 활용할 수 있으며, 외부 또는 머리 장착 카메라는 전체 장면을 설명하고 손목 장착 카메라는 세부적인 조작 정보를 제공할 수 있다. 객체를 인식하는 것만으로는 충분하지 않으며 로봇이 어디에서 어떤 방식으로 상호작용해야 하는지를 결정해야 하므로, 시각 표현은 물리적 상호작용에 필요한 특징을 유지해야 한다.
+
+언어(Language)는 유연한 작업 조건화 메커니즘(Task-Conditioning Mechanism)으로 작동한다. 모든 행동마다 별도의 학습된 제어기를 선택하는 대신 사용자는 자연어로 목표를 설명할 수 있으며, 다중모달 모델은 명령을 관련 시각 정보와 학습된 시연에 연결한다. 따라서 객체 집기, 배치, 열기, 접기, 전달, 정렬과 같은 명령은 언어적 맥락과 관측된 장면 상태가 서로 다르더라도 공통된 정책 표현(Common Policy Representation)을 공유할 수 있다.
+
+고유감각 상태(Proprioceptive State)는 의미적 의도(Semantic Intent)를 실행 가능한 움직임으로 변환하는 데 필요한 체화체 정보를 제공한다. 동일한 시각적 명령도 현재 팔 위치, 손 구성 또는 이전 움직임에 따라 서로 다른 행동을 요구할 수 있다. 따라서 관절 상태와 기타 로봇 변수는 비전 및 언어와 함께 행동 전문가(Action Expert)의 조건으로 사용된다. 이를 통해 무엇이 수행되어야 하는지를 이해하는 과정과 현재 로봇 구성에서 어떤 움직임을 수행해야 하는지를 결정하는 과정 사이의 간극을 연결한다.
+
+Pi0는 하나의 순간적인 명령만 생성하는 대신 여러 미래 행동 단계를 포함하는 행동 청크(Action Chunk)를 예측할 수 있다. 행동 청킹(Action Chunking)은 단기적인 시간 구조(Temporal Structure)를 포착하고 서로 연관된 움직임을 함께 생성할 수 있도록 한다. 조작 작업에서는 도달(Reaching), 접근(Approaching), 파지(Grasping), 객체 이동이 부드럽게 전환되어야 하므로 이러한 특성이 중요하다. 로봇은 행동 청크의 일부를 실행한 후 새로운 관측을 획득하고 다음 시퀀스를 생성할 수 있다.
+
+이러한 행동 청크는 후퇴 지평 실행(Receding-Horizon Execution)을 통해 폐루프 인식-행동 과정(Closed Perception-Action Loop)에 사용할 수 있다. 정책은 환경을 관측하고 미래 행동 구간을 예측한 다음 적절한 부분을 실행하며, 갱신된 센서 정보를 사용하여 다시 추론한다. 이 방식은 긴 개방루프 예측(Open-Loop Prediction)이 전체 작업을 결정하는 것을 방지한다. 대신 환경 변화, 실행 오류, 객체 움직임이 반복적인 관측과 재계획(Replanning)을 통해 이후 정책 결정에 반영될 수 있다.
+
+휴머노이드 작업에서 Pi0는 제한 없는 액추에이터 제어기(Unrestricted Actuator Controller)가 아니라 적절한 전신 행동 표현(Full-Body Action Representation)과 통합되어야 한다. 조작 출력은 팔, 손 또는 작업 공간 목표(Task-Space Target)를 표현할 수 있으며, 보행과 균형은 특화된 제어 계층을 통해 협응될 수 있다. 몸통이나 전신 움직임이 학습된 행동 공간에 포함되는 경우에도 하위 제어기는 요청된 움직임이 지지 접촉(Support Contact)과 동적 안정성(Dynamic Stability)에 부합하도록 보장해야 한다.
+
+따라서 전신 제어기(Whole-Body Controller)는 흐름 정책과 휴머노이드 기구 사이의 실행 인터페이스(Execution Interface)로 기능할 수 있다. 학습된 행동 참조값(Action Reference)은 운동학, 접촉 제약, 균형, 액추에이터 제한, 작업 우선순위를 만족하면서 관절 수준 명령으로 변환된다. 이러한 아키텍처는 VLA 정책의 일반화 이점을 유지하면서 결정론적 제어기(Deterministic Controller)가 대규모 다중모달 추론 루프에 적합하지 않은 빠른 안정화 문제를 해결할 수 있도록 한다.
+
+흐름 정책(Flow Policy)의 품질은 학습 데이터의 다양성과 일관성에 크게 의존한다. 시연 데이터는 이미지, 언어 명령, 로봇 상태, 행동을 시간적으로 정확하게 정렬해야 한다. 이질적인 로봇 데이터셋(Heterogeneous Robot Dataset)은 행동 범위를 확대할 수 있지만, 행동 정의, 좌표계, 카메라 구성, 체화체의 차이를 정규화하거나 명시적으로 표현해야 한다. 데이터셋의 규모가 크더라도 일관되지 않은 행동 의미론(Action Semantics)이나 잘못된 시간 정렬(Temporal Alignment)을 보완할 수는 없다.
+
+플랫폼 간 체화체 학습(Cross-Embodiment Training)은 다양한 로봇이 많은 조작 개념을 공유하기 때문에 매력적인 접근법이다. 객체를 향해 도달하고, 그리퍼(Gripper)를 닫고, 객체를 목적지로 이동하거나, 협응된 양손 행동(Bimanual Behavior)을 수행하는 과정에는 로봇의 형태가 달라도 재사용할 수 있는 구조가 존재한다. 그러나 원시 관절 명령(Raw Joint Command)은 직접 전이할 수 없다. 따라서 공유된 의미 지식을 각 대상 휴머노이드의 운동학과 제어 규약에 매핑하기 위한 로봇별 상태 및 행동 인터페이스가 필요하다.
+
+미세조정(Fine-Tuning)은 광범위하게 사전학습된 Pi0 방식의 정책을 휴머노이드 응용 분야에 특화하는 방법을 제공한다. 일반 모델은 이미 다양한 객체, 명령, 조작 패턴을 이해할 수 있으며, 추가적인 휴머노이드 시연을 통해 플랫폼별 도달 가능성(Reachability), 손 행동, 신체 협응, 운영 작업을 학습할 수 있다. 따라서 미세조정은 비용이 많이 드는 실제 로봇 데이터 수집을 일반적인 조작 지식과 대상 체화체가 요구하는 특성의 차이에 집중할 수 있도록 한다.
+
+흐름 정합은 다중모달 행동 분포(Multimodal Action Distribution)를 다루는 데에도 중요한 개념적 장점을 제공한다. 하나의 조작 문제에는 하나의 결정론적인 해답만 존재하는 것이 아니라 여러 개의 유효한 궤적이 존재할 수 있다. 로봇은 서로 다른 방향에서 객체에 접근하거나 다른 중간 자세를 사용하면서도 작업을 성공적으로 완료할 수 있다. 연속 궤적에 대한 분포를 모델링하면 서로 호환되지 않는 시연을 평균화하는 회귀 목적함수(Regression Objective)보다 이러한 행동 다양성을 자연스럽게 표현할 수 있다.
+
+흐름 기반 생성은 초기 샘플을 행동 궤적으로 변환하는 과정에서 여러 번의 모델 평가가 필요하므로 추론 효율성(Inference Efficiency)은 여전히 실용적인 고려사항이다. 적분 단계(Integration Step)의 수는 지연시간과 행동 품질 모두에 영향을 미친다. 따라서 휴머노이드 배포 아키텍처는 수치 샘플링 비용, 다중모달 모델 크기, 행동 지평(Action Horizon), 필요한 응답 주기 사이의 균형을 유지해야 한다. 가속 추론(Accelerated Inference), 저정밀도 연산(Reduced Precision), 최적화된 어텐션(Optimized Attention), 비동기 실행(Asynchronous Execution)을 통해 온보드 컴퓨팅 제약을 완화할 수 있다.
+
+행동 생성 이후 실제 물리적 실행 이전에는 안전 필터링(Safety Filtering)이 필요하다. 학습된 분포에서 그럴듯한 행동이라 하더라도 관절 제한을 위반하거나, 자기 충돌(Self-Collision)을 발생시키거나, 속도 또는 힘 제한을 초과하거나, 휴머노이드의 안정성을 훼손할 수 있다. 결정론적 안전 계층(Deterministic Safety Layer)은 예측된 궤적을 검사하여 위험한 명령을 거부하거나 수정하거나 실행 가능한 영역으로 투영할 수 있다. 비상 정지(Emergency Stop)와 폴백 제어기(Fallback Controller)는 학습된 VLA 정책과 독립적으로 유지되어야 한다.
+
+평가(Evaluation)는 정책이 단순히 시연 데이터를 암기했는지를 넘어 일반화 능력을 측정해야 한다. 관련 시험에는 변경된 객체 자세(Object Pose), 서로 다른 장면 구성, 언어적 변형(Linguistic Variation), 익숙한 기술의 새로운 조합, 실행 중 외란, 반복되는 장기 작업(Long-Horizon Task) 등이 포함된다. 휴머노이드에서는 추가적으로 균형, 전신 협응, 접촉 안전(Contact Safety), 복구 행동(Recovery Behavior), 추론 지연시간, 그리고 로봇이 자세나 위치를 변경하는 동안에도 조작이 안정적으로 유지되는지를 평가해야 한다.
+
+따라서 Pi0 방식의 흐름 정책은 의미적 다중모달 이해(Semantic Multimodal Understanding)를 연속적인 물리 행동과 연결하는 강력한 메커니즘을 제공한다. 그 가치는 단순히 로봇 궤적을 생성하는 데 있는 것이 아니라 비전, 언어, 고유감각, 행동이 하나의 학습된 조건부 정책(Learned Conditional Policy)에 참여할 수 있다는 데 있다. 흐름 정합은 연속적인 생성 메커니즘을 제공하고, 행동 청킹과 폐루프 실행은 생성된 궤적을 실용적인 순차 행동(Sequential Behavior)으로 변환한다.
+
+휴머노이드 VLA 아키텍처에서 Pi0는 더 큰 로봇 제어 계층 구조 내부에서 동작하는 일반화 행동 정책(Generalist Action Policy)으로 이해해야 한다. 모델은 다중모달 맥락을 해석하고 구조화된 연속 행동을 생성하며, 체화체 어댑터(Embodiment Adapter), 전신 제어기, 실시간 안정화(Real-Time Stabilization), 안전 감독(Safety Supervision)은 이러한 행동을 신뢰성 있는 물리적 실행으로 변환한다. 이러한 결합은 언어 조건부 지능(Language-Conditioned Intelligence)을 적응 가능한 휴머노이드 조작으로 연결하는 실용적인 경로를 제공한다.
+
+## 08.05. Humanoid Teleoperation for IL Data Collection [w/Code]
+
+![](images/image5.png){width="7.268055555555556in" height="7.268055555555556in"}
+
+원격조작(Teleoperation)은 인간 작업자가 로봇의 자체 체화체(Embodiment)를 통해 복잡한 물리적 행동을 시연할 수 있도록 하기 때문에 휴머노이드 로봇의 모방학습 데이터(Imitation-Learning Data)를 수집하는 핵심적인 방법이다. 원하는 궤적이나 보상 함수(Reward Function)를 수작업으로 정의하는 대신, 작업자가 작업을 수행하는 동안 시스템은 동기화된 관측, 로봇 상태, 명령, 실행 행동을 기록한다. 이러한 시연(Demonstration)은 휴머노이드 정책이 재사용 가능한 감각운동 행동(Sensorimotor Behavior)을 학습하기 위한 지도학습 예제(Supervised Example)가 된다.
+
+휴머노이드 원격조작은 작업자가 두 팔, 정교한 손(Dexterous Hand), 몸통 자세, 머리 방향, 보행, 균형을 함께 협응해야 할 수 있기 때문에 일반적인 매니퓰레이터를 제어하는 것보다 어렵다. 유용한 인터페이스는 작업자가 모든 관절을 개별적으로 제어하지 않고도 인간의 의도를 전달할 수 있어야 한다. 따라서 원격조작 아키텍처는 인간의 움직임이나 장치 명령을 로봇과 호환되는 참조값으로 매핑하고, 하위 제어기가 물리적 실행 가능성과 안정성을 유지하도록 구성한다.
+
+작업자 인터페이스(Operator Interface)는 필요한 작업 정밀도에 따라 다양한 입력 모달리티(Input Modality)를 사용할 수 있다. 가상현실 제어기(Virtual-Reality Controller)는 6자유도 손 목표를 제공하고, 모션 캡처 시스템(Motion-Capture System)은 상체 또는 전신 자세를 추정하며, 장갑형 장치(Glove)는 손가락 구성을 획득할 수 있다. 일반적인 조이스틱(Joystick)은 보행이나 이산 모드(Discrete Mode)를 제어할 수 있다. 이러한 인터페이스를 결합하면 인간 움직임과 로봇 행동 사이의 직관적인 관계를 유지하면서 조작과 이동을 동시에 표현할 수 있다.
+
+동작 리타기팅(Motion Retargeting)은 인간의 움직임을 휴머노이드의 형태(Morphology)에 적합한 명령으로 변환한다. 로봇은 인간과 다른 팔다리 길이, 관절 범위, 운동학적 구조, 손 메커니즘을 가지므로 인간의 관절 각도를 직접 복사하는 것은 일반적으로 불가능하다. 대신 리타기팅은 말단장치 자세(End-Effector Pose), 손 사이의 상대 위치, 몸통 방향, 파지 구성과 같은 작업 관련 변수를 유지하면서 로봇 자체의 운동학적·기계적 제약조건을 만족하는 상태를 계산한다.
+
+조작 과정에서 자세 변화가 필요한 경우 전신 리타기팅(Whole-Body Retargeting)이 특히 중요해진다. 낮은 선반에 손을 뻗거나, 큰 물체를 들어 올리거나, 두 손을 사용하는 작업에는 다리, 골반, 몸통, 팔의 협응된 움직임이 필요할 수 있다. 최적화 기반 역기구학(Optimization-Based Inverse Kinematics) 또는 전신 제어(Whole-Body Control)는 작업자가 원하는 움직임을 로봇이 사용할 수 있는 자유도 전체에 분배할 수 있다. 이 매핑 과정에는 관절 제한, 자기 충돌(Self-Collision), 지지 조건, 균형 제약조건을 직접 포함할 수 있다.
+
+원격조작에서는 일반적으로 작업자의 의도와 고주파 안정화(High-Frequency Stabilization)를 분리해야 한다. 인간 작업자는 관리 가능한 주기로 원하는 움직임, 파지 또는 작업 수준 명령을 제공하고, 로봇의 실시간 제어기(Real-Time Controller)는 훨씬 높은 주파수에서 균형, 관절 조절, 접촉력, 액추에이터 안전을 유지한다. 이러한 계층 구조는 네트워크 지연이나 불규칙한 작업자 업데이트가 로봇을 직접 불안정하게 만드는 것을 방지하고, 플랫폼의 물리적 성능과 일치하는 시연을 생성할 수 있도록 한다.
+
+양방향 피드백(Bilateral Feedback) 또는 다중모달 피드백(Multimodal Feedback)은 시연 품질을 향상시킬 수 있다. 머리 및 손목 카메라의 시각 피드백을 통해 작업자는 로봇의 관점에서 작업을 관찰할 수 있으며, 힘, 햅틱(Haptic), 촉각 또는 접촉 상태 피드백은 물리적 상호작용 정보를 전달할 수 있다. 완전한 힘 반영(Force Reflection)이 제공되지 않더라도 접촉력, 관절 제한, 충돌 경고, 파지 상태를 표시하면 작업자가 위험한 행동을 피하고 이후 모방학습에 사용할 수 있는 보다 깨끗한 시연을 생성하는 데 도움이 된다.
+
+데이터 기록기(Data Recorder)는 작업자의 입력 명령보다 훨씬 많은 정보를 수집해야 한다. 유용한 모방학습 에피소드(Imitation-Learning Episode)는 동기화된 RGB 또는 깊이 이미지, 관절 위치 및 속도, 말단장치 자세, 힘-토크 측정값, 촉각 상태, 베이스 상태, 접촉 정보, 작업자 명령, 제어기 출력, 타임스탬프(Timestamp)를 포함할 수 있다. 비전-언어-행동 학습(Vision-Language-Action Training)을 위한 시연이라면 언어 명령과 작업 메타데이터(Task Metadata)도 함께 저장해야 한다.
+
+모방학습은 관측이 시연된 행동과 정확하게 대응한다고 가정하므로 시간 동기화(Temporal Synchronization)는 매우 중요하다. 카메라 프레임, 고유감각(Proprioception), 힘 측정값, 작업자 명령, 실행된 로봇 상태는 서로 다른 주파수와 통신 경로를 통해 도착할 수 있다. 따라서 각 시연에서 실제 관측-행동 시퀀스(Observation-Action Sequence)를 정확하게 재구성하려면 공통 시계(Shared Clock), 정확한 타임스탬프, 버퍼링(Buffering), 결정론적 정렬 절차(Deterministic Alignment Procedure)가 필요하다.
+
+명령된 행동(Commanded Action)과 실제 실행된 행동(Executed Action)의 구분은 휴머노이드에서 특히 중요하다. 원격 작업자가 요청한 손 궤적은 실제 로봇에 전달되기 전에 역기구학, 균형 제어, 충돌 회피, 액추에이터 제한에 의해 수정될 수 있다. 따라서 작업자의 명령만 기록하면 실제로 발생한 물리적 행동을 잘못 표현할 수 있다. 고품질 데이터셋은 의도된 참조값(Intended Reference)과 최종 실행 상태 또는 행동을 모두 보존하여 학습 파이프라인이 적절한 지도 목표(Supervision Target)를 선택할 수 있도록 해야 한다.
+
+시연 분할(Demonstration Segmentation)은 긴 원격조작 세션을 의미 있는 에피소드와 작업 단계(Task Phase)로 구성한다. 하나의 완전한 조작 시퀀스에는 접근(Approach), 도달(Reach), 사전 파지(Pre-Grasp), 파지(Grasp), 운반(Transport), 배치(Placement), 해제(Release) 단계가 포함될 수 있다. 명확한 에피소드 경계와 성공 레이블(Success Label)은 데이터셋 필터링과 평가를 단순화한다. 추가적인 주석(Annotation)을 통해 모든 행동을 관절 수준에서 수작업으로 레이블링하지 않고도 작업 객체, 실패 이벤트, 작업자 개입, 접촉 전환, 복구 행동을 식별할 수 있다.
+
+실패한 시연(Failed Demonstration)은 어려운 상태와 복구 행동에 대한 유용한 정보를 포함할 수 있으므로 자동으로 폐기해서는 안 된다. 그러나 모방학습 데이터셋에서는 성공적인 행동과 우발적이거나 위험한 행동을 구분해야 한다. 실패 레이블(Failure Label), 개입 마커(Intervention Marker), 작업 결과 메타데이터를 사용하면 학습 과정에서 부적절한 구간을 제외하거나 실패 예측 및 복구 학습(Recovery Learning)에 의도적으로 활용할 수 있다. 따라서 데이터셋 큐레이션(Dataset Curation)은 단순한 데이터 수집량만큼 중요하다.
+
+작업자의 숙련도(Operator Skill)는 데이터 품질에 큰 영향을 준다. 서로 다른 작업자는 동일한 작업에 대해 서로 다른 궤적, 속도, 파지 전략, 신체 구성을 선택할 수 있다. 이러한 다양성은 정책 일반화(Policy Generalization)를 향상시킬 수 있지만, 일관성이 없거나 불필요하게 복잡한 시연은 학습을 어렵게 만들 수 있다. 표준화된 절차를 통해 작업자를 교육하고 여러 작업자로부터 반복적인 시연을 수집하면 일관된 작업 성공 정의를 유지하면서 행동 다양성을 확보할 수 있다.
+
+지연시간(Latency)은 원격조작에서 또 다른 중요한 고려사항이다. 시각 피드백이나 명령 전송이 지연되면 진동(Oscillation), 오버슈트(Overshoot), 불필요한 보정 움직임이 발생하여 시연 궤적을 오염시킬 수 있다. 로컬 안정화(Local Stabilization), 예측 시각화(Predictive Visualization), 명령 평활화(Command Smoothing), 제한된 변화율 인터페이스(Bounded-Rate Interface)를 이용하면 이러한 영향을 줄일 수 있다. 고정밀 접촉 작업에서는 비정상적인 에피소드를 이후 데이터셋 검증에서 탐지할 수 있도록 통신 지연도 함께 기록해야 한다.
+
+데이터 수집 과정 전체에서 안전 감독(Safety Supervision)은 지속적으로 활성화되어야 한다. 인간이 로봇을 제어한다고 해서 원격조작이 자동으로 안전한 행동을 보장하는 것은 아니다. 관절 제한, 자기 충돌 검사, 환경 충돌 모니터링, 힘 임계값(Force Threshold), 균형 제약, 작업공간 경계, 비상 정지(Emergency Stop) 메커니즘은 작업자 인터페이스와 독립적으로 작동해야 한다. 위험한 명령은 실제 액추에이터에 전달되기 전에 거부하거나 실행 가능한 영역(Feasible Region)으로 투영할 수 있다.
+
+이동형 휴머노이드(Mobile Humanoid)에서는 보행이 원격조작 설계에 추가적인 계층을 만든다. 인간의 다리 움직임을 로봇의 보행에 직접 매핑하는 것은 일반적으로 필요하지 않으며 불안정성을 유발할 수 있다. 실용적인 인터페이스에서는 작업자가 보행 방향, 속도 또는 목표 위치를 명령하고 자율 보행 제어기(Autonomous Locomotion Controller)가 발걸음(Footstep)을 생성하면서 균형을 유지하도록 할 수 있다. 이후 조작 명령을 보행과 협응하여 통합 이동-조작 작업(Loco-Manipulation Task)의 시연을 수집할 수 있다.
+
+양손 데이터 수집(Bimanual Data Collection)에서는 두 손을 독립적인 매니퓰레이터처럼 처리하기보다 두 손 사이의 관계를 보존해야 한다. 용기 열기, 재료 접기, 큰 물체 운반, 삽입 과정에서 부품 고정과 같은 작업은 상대적인 손 자세(Relative Hand Pose)와 동기화된 힘 적용에 의존한다. 따라서 원격조작 시스템은 절대 움직임과 상대 움직임을 모두 기록하여 모방 정책이 성공적인 양손 행동의 기반이 되는 협응 구조(Coordination Structure)를 학습할 수 있도록 해야 한다.
+
+언어 주석(Language Annotation)은 일반적인 원격조작 궤적을 언어 조건부 일반화 정책(Language-Conditioned Generalist Policy)에 적합한 데이터로 변환한다. 작업자는 각 에피소드 전에 미리 정의된 명령을 받을 수 있고, 작업 내용을 음성으로 설명하거나, 시연을 표준화된 텍스트 설명과 연결할 수 있다. 동일한 행동에 여러 언어 표현을 연결하면 하나의 특정 문장 표현에 대한 의존성을 줄일 수 있다. 이렇게 생성된 데이터셋은 의미적 작업 의도(Semantic Task Intent)를 시각 관측 및 물리적 행동과 연결한다.
+
+데이터 수집을 확장하려면 원격조작 과정 주변에 자동화된 데이터셋 인프라(Automated Dataset Infrastructure)가 필요하다. 각 에피소드에는 고유 식별자(Identifier)를 할당하고 로봇 구성, 소프트웨어 버전, 센서 보정(Sensor Calibration), 작업 정의, 작업자 정보, 환경 메타데이터, 작업 결과 상태를 함께 기록해야 한다. 자동 검증(Automated Validation)을 통해 데이터가 학습 저장소(Training Repository)에 입력되기 전에 누락된 프레임, 타임스탬프 불연속, 비정상적인 관절값, 손상된 이미지, 불완전한 에피소드를 탐지할 수 있다.
+
+시뮬레이션(Simulation)은 위험하거나 드물거나 변화가 매우 큰 상황을 수집할 때 실제 원격조작을 보완할 수 있다. 동일한 작업자 인터페이스를 이용해 시뮬레이션된 휴머노이드를 제어하면 무작위화된 환경(Randomized Environment)에서 시연 데이터를 빠르게 생성할 수 있다. 이러한 궤적은 비용이 많이 드는 실제 환경 데이터 수집을 시작하기 전에 작업 범위를 확장할 수 있다. 그러나 실제 접촉 동역학, 센서 잡음, 액추에이터 특성, 통신 영향, 운영 제약조건을 수집하려면 실제 로봇 시연이 여전히 필수적이다.
+
+최종적인 모방학습 데이터셋은 작업자가 로봇을 어떻게 움직였는지만 표현하는 것이 아니라 특정 관측과 명령에서 왜 해당 행동이 적절했는지를 나타낼 수 있어야 한다. 정밀하게 동기화된 다중모달 궤적(Multimodal Trajectory)을 통해 행동 복제(Behavioral Cloning), 시퀀스 모델링(Sequence Modeling), 행동 청크 예측(Action-Chunk Prediction), VLA 정책은 인식과 언어에서 물리적 행동으로 이어지는 매핑을 학습할 수 있다. 따라서 데이터셋의 품질은 학습된 휴머노이드 정책의 신뢰성과 일반화 성능을 직접적으로 제한한다.
+
+궁극적으로 휴머노이드 원격조작은 인간의 작업 수행 능력과 확장 가능한 로봇 학습(Scalable Robot Learning)을 연결하는 가교 역할을 한다. 직관적인 작업자 인터페이스, 동작 리타기팅, 전신 제어, 동기화된 다중모달 기록, 언어 주석, 안전 감독, 체계적인 데이터셋 큐레이션을 결합함으로써 인간의 시연을 재사용 가능한 학습 경험(Reusable Training Experience)으로 변환할 수 있다. 이러한 인프라는 직접적인 인간 제어에 대한 의존성을 점진적으로 줄일 수 있는 다중 작업 일반화 휴머노이드 정책(Multi-Task Generalist Humanoid Policy)을 개발하기 위한 핵심 기반이 된다.
+
+## 08.06. Multi Task Generalist Policy for Humanoid [w/Code]
+
+![](images/image6.png){width="7.268055555555556in" height="7.268055555555556in"}
+
+다중 작업 일반화 정책(Multi-Task Generalist Policy)은 휴머노이드 로봇이 각각의 작업마다 독립적인 정책을 유지하는 대신 하나의 공유 학습 모델(Shared Learned Model)을 통해 다양한 행동을 수행할 수 있도록 한다. 휴머노이드 VLA 아키텍처에서 정책은 시각 관측(Visual Observation), 언어 명령(Language Instruction), 고유감각 상태(Proprioceptive State), 작업 맥락(Task Context)을 입력받아 현재 상황에 적합한 행동을 생성한다. 목표는 단순히 여러 기술을 결합하는 것이 아니라 작업 간 지식을 전이할 수 있는 재사용 가능한 표현(Reusable Representation)을 학습하는 것이다.
+
+기존의 작업별 로봇 정책(Task-Specific Robot Policy)은 일반적으로 특정 객체를 파지하거나, 특정 형태의 용기를 열거나, 하나의 조작 시퀀스를 실행하는 것과 같이 좁게 정의된 행동에 최적화된다. 이러한 접근 방식은 새로운 응용이 추가될 때마다 데이터, 학습, 통합, 검증이 추가로 필요하기 때문에 확장하기 어렵다. 반면 일반화 정책(Generalist Policy)은 작업 사이의 공통 구조를 학습하여 인식, 언어 그라운딩(Language Grounding), 조작 지식, 행동 생성을 광범위한 행동 레퍼토리(Behavioral Repertoire)에서 공유할 수 있도록 한다.
+
+언어(Language)는 다중 작업 정책에서 행동을 선택하기 위한 자연스러운 메커니즘을 제공한다. 객체를 집거나, 다른 위치로 이동하거나, 서랍을 열거나, 물건을 사람에게 전달하는 등의 명령은 동일한 정책 네트워크(Policy Network)를 조건화할 수 있다. 모델은 모든 작업에 대해 수작업으로 지정된 제어기 식별자(Controller Identifier)를 필요로 하지 않는다. 대신 언어적 맥락이 의도된 목표를 지정하고, 시각 및 고유감각 관측이 현재의 물리적 상태에서 해당 목표를 어떻게 실행할지를 결정한다.
+
+비전(Vision)은 언어적으로 유사하지만 물리적 구성이 서로 다른 작업을 구분하는 데 필요한 환경 그라운딩(Environmental Grounding)을 제공한다. 정책은 관련 객체, 객체의 위치, 주변 장애물, 사용 가능한 표면, 이전 행동으로 인해 발생한 변화를 식별해야 한다. 개방형 어휘 시각 표현(Open-Vocabulary Visual Representation)은 작업별 학습 과정에서 고정된 클래스로 명시적으로 표현되지 않았던 객체나 범주도 지원할 수 있어 일반화 휴머노이드 정책의 실질적인 적용 범위를 확장한다.
+
+고유감각(Proprioception)은 일반적인 작업 이해를 실행 가능한 행동과 연결하는 체화체 맥락(Embodiment Context)을 제공한다. 팔 구성, 손 상태, 신체 자세, 이전 움직임에 대한 정보가 없다면 명령만으로 다음 물리적 행동을 결정할 수 없다. 따라서 정책은 외부 관측과 내부 상태 모두를 조건으로 행동을 생성한다. 이를 통해 동일한 의미적 명령이라도 로봇이 서로 다른 초기 구성에서 시작하는 경우 서로 다른 모터 반응(Motor Response)을 생성할 수 있다.
+
+다중 작업 학습(Multi-Task Learning)은 다양한 작업, 환경, 객체, 명령, 행동 궤적의 조합을 포함하는 데이터셋에 의존한다. 원격조작 시연(Teleoperation Demonstration)은 조작 및 전신 행동의 협응된 사례를 제공하기 때문에 특히 유용하다. 시뮬레이션(Simulation), 자율 롤아웃(Autonomous Rollout), 기존 로봇 데이터셋을 이용하여 이러한 경험을 확장할 수 있다. 중요한 요구사항은 관측, 언어, 상태, 행동이 일관된 의미론(Semantics)과 정확한 시간 동기화(Temporal Synchronization)를 가져야 한다는 것이다.
+
+데이터셋 균형(Dataset Balance)은 일반화 정책이 무엇을 학습하는지에 큰 영향을 미친다. 단순하거나 자주 수집되는 작업이 학습 데이터를 지배하면 모델은 높은 평균 성능을 달성하면서도 어렵지만 운영상 중요한 행동에서는 낮은 성능을 보일 수 있다. 샘플링 전략(Sampling Strategy)을 통해 희귀 작업, 복구 상황, 접촉이 많은 조작(Contact-Rich Manipulation), 장기 시연(Long-Horizon Demonstration)의 기여도를 높일 수 있다. 따라서 작업 다양성은 전체 궤적 수만이 아니라 각 작업의 빈도와 함께 평가해야 한다.
+
+공유 표현(Shared Representation)은 관련 작업 사이의 긍정적 전이(Positive Transfer)를 가능하게 한다. 다양한 객체를 향해 손을 뻗은 경험은 새로운 도달 행동(Reaching Behavior)을 향상시킬 수 있으며, 객체 배치에서 학습된 지식은 분류나 선반 적재 작업에 활용될 수 있다. 양손 시연(Bimanual Demonstration)은 운반 및 조립에 유용한 표현을 제공할 수 있다. 일반화는 모델이 개별 작업 레이블과 연결된 고립된 궤적을 암기하는 대신 이러한 공통 구조를 학습할 때 나타난다.
+
+반대로 작업이 서로 충돌하는 행동을 요구하거나 이질적인 데이터셋이 일관되지 않은 행동 규약(Action Convention)을 사용하는 경우 부정적 전이(Negative Transfer)가 발생할 수 있다. 하나의 작업에 유용한 표현이 다른 작업의 성능을 저하시킬 수 있으며, 특히 데이터 분포가 크게 불균형한 경우 이러한 문제가 발생하기 쉽다. 따라서 학습에는 신중한 정규화(Normalization), 작업 조건화(Task Conditioning), 데이터셋 혼합(Dataset Mixing), 작업 범주별 평가가 필요하다. 단순히 모델이나 데이터셋의 규모를 증가시키는 것만으로 모든 행동이 동시에 향상되는 것은 아니다.
+
+행동 표현(Action Representation)은 다중 작업 휴머노이드 정책에서 중요한 설계 요소이다. 원시 관절 명령(Raw Joint Command)은 직접적인 제어가 가능하지만 체화체에 매우 종속적이며 로봇 간 공유가 어렵다. 작업 공간 목표(Task-Space Target), 행동 청크(Action Chunk), 손 상태(Hand State), 보행 명령(Locomotion Command) 또는 기타 구조화된 표현은 공통된 행동 패턴을 드러낼 수 있다. 전신 정책(Full-Body Policy)은 조작, 자세 조정, 이동을 일관된 행동 인터페이스(Action Interface)에서 표현하기 위해 여러 종류의 표현을 결합할 수 있다.
+
+시간적 추상화(Temporal Abstraction)는 개별 모터 명령을 넘어 지속되는 작업을 정책이 표현할 수 있도록 한다. 행동 청크는 짧은 협응 시퀀스를 부호화하고, 더 긴 작업은 반복적인 폐루프 추론(Closed-Loop Inference)을 통해 형성될 수 있다. 로봇은 이전 행동 구간의 결과를 관측하고 갱신된 맥락을 이용하여 다음 행동을 예측한다. 이러한 후퇴 지평 과정(Receding-Horizon Process)은 하나의 개방루프 예측(Open-Loop Prediction)에서 전체 작업 궤적을 생성하지 않고도 공유 정책이 다단계 행동을 실행할 수 있도록 한다.
+
+장기 작업(Long-Horizon Task)은 작은 실행 오류가 시간에 따라 누적되기 때문에 추가적인 문제를 발생시킨다. 개별적인 도달과 파지 동작을 성공적으로 수행하는 정책도 이러한 기술을 긴 시퀀스로 결합해야 할 때 실패할 수 있다. 따라서 학습 데이터에는 성공적인 짧은 구간뿐 아니라 완전한 작업 에피소드(Complete Task Episode)와 복구 사례(Recovery Example)가 포함되어야 한다. 작업 진행 상태 표현(Task Progress Representation)이나 관측 이력(Observation History)은 모델이 어떤 하위 목표가 이미 완료되었고 다음에 무엇을 수행해야 하는지 판단하는 데 도움을 줄 수 있다.
+
+일반화 행동(Generalist Behavior)은 언어적 변형(Linguistic Variation)에 대한 강건성도 필요로 한다. 인간 사용자는 동일한 작업을 서로 다른 단어, 상세 수준, 객체 및 위치에 대한 표현으로 설명할 수 있다. 여러 형태의 명령을 이용해 학습하면 고정된 명령 템플릿(Command Template)에 대한 의존성을 줄일 수 있다. 비전-언어 표현(Vision-Language Representation)은 서로 관련된 표현을 유사한 의미적 목표와 연결하면서도 현재의 시각 장면을 이용해 "저 상자", "위쪽 선반", "용기 옆의 물체"와 같은 지시 표현을 해석할 수 있다.
+
+휴머노이드에서 다중 작업 일반화(Multi-Task Generalization)는 신체 구성이 작업 실행 가능성에 영향을 미치기 때문에 단순한 조작을 넘어 확장된다. 로봇은 작업대로 걸어가고, 발의 위치를 재조정하고, 몸통을 숙이고, 한 손 또는 두 손을 사용한 후 작업 완료 뒤 자세를 복구해야 할 수 있다. 일반화 정책은 이러한 행동 전반에 걸쳐 협응된 참조값을 제공할 수 있지만, 빠른 균형 및 보행 안정화는 전용 실시간 제어 계층(Real-Time Control Layer)에서 유지되어야 한다.
+
+계층적 실행(Hierarchical Execution)은 일반 지능(General Intelligence)과 로봇 동역학(Robot Dynamics)을 연결하는 실용적인 인터페이스를 제공한다. 학습된 정책은 의미적 행동 또는 작업 공간 행동 참조값을 생성하고, 전신 제어(Whole-Body Control)는 이를 동역학적으로 실행 가능한 관절 행동으로 변환할 수 있다. 접촉 제약, 균형, 자기 충돌 회피(Self-Collision Avoidance), 토크 제한, 작업 우선순위는 정책 하위 계층에서 강제될 수 있다. 이러한 구조를 통해 파운데이션 모델이 결정론적 제어를 대체하지 않고도 학습이 행동 일반화에 집중할 수 있다.
+
+교차 체화체 학습(Cross-Embodiment Learning)은 사용 가능한 학습 경험을 더욱 확장할 수 있다. 서로 다른 매니퓰레이터나 휴머노이드의 데이터는 관절 구조가 다르더라도 공통된 작업 지식을 포함할 수 있다. 체화체별 어댑터(Embodiment-Specific Adapter)는 로봇 상태와 행동을 공유 모델과 호환되는 표현으로 변환할 수 있다. 공통 정책은 전이 가능한 의미적·행동적 구조를 학습하고, 어댑터는 플랫폼별 운동학과 제어 규약을 유지한다.
+
+미세조정(Fine-Tuning)을 이용하면 광범위하게 학습된 일반화 정책을 공유 지식을 유지하면서 특정 휴머노이드 또는 운영 도메인에 특화할 수 있다. 제조 환경에서는 조립과 자재 취급(Material Handling)을 강조할 수 있고, 물류 환경에서는 집기, 운반, 분류를 강조할 수 있다. 플랫폼별 시연을 이용하여 모델을 이러한 분포에 적응시키면서 광범위한 사전학습에서 획득한 일반적인 비전-언어 및 조작 표현을 유지할 수 있다.
+
+정책이 표현하는 작업의 수와 관계없이 안전 감독(Safety Supervision)은 필수적이다. 행동 범위가 넓어질수록 가능한 실패 공간도 함께 증가한다. 따라서 예측된 행동은 관절 제한, 충돌, 과도한 속도 또는 힘, 불안정한 자세, 유효하지 않은 접촉, 작업공간 위반을 검사해야 한다. 안전 계층(Safety Layer)은 정책 출력을 수정하거나 거부할 수 있어야 하며, 실행이 위험해지는 경우 로봇을 사전에 정의된 폴백 상태(Fallback State)로 전환할 수 있어야 한다.
+
+다중 작업 정책의 평가(Evaluation)는 하나의 평균 성공률만을 보고해서는 안 된다. 작업군(Task Family), 객체 변화, 환경 변화, 명령 변형, 초기 로봇 구성, 이전에 보지 못한 조합에 걸쳐 성능을 평가해야 한다. 장기 작업 완료율(Long-Horizon Completion), 복구 행동, 안전 위반, 행동의 부드러움(Action Smoothness), 추론 지연시간(Inference Latency)도 중요하다. 좁은 범위에서 반복된 시연 조건에서만 성공하는 정책은 진정한 일반화 정책으로 간주하기 어렵다.
+
+가능한 경우 일반화 능력은 조합적 방식(Compositional Manner)으로 시험해야 한다. 로봇이 용기 열기, 객체 집기, 물건 운반, 배치를 각각 학습했더라도 더 강력한 시험은 이러한 능력을 새로운 시퀀스로 결합하도록 요구하는 것이다. 이러한 평가는 모델이 재사용 가능한 작업 구조를 학습했는지 아니면 익숙한 관측을 암기된 행동 궤적과 연결했는지를 보여준다. 따라서 조합적 평가(Compositional Evaluation)는 범용 휴머노이드 지능(General-Purpose Humanoid Intelligence)으로의 발전 정도를 측정하는 핵심 요소이다.
+
+다중 작업 일반화 정책은 궁극적으로 휴머노이드 VLA 시스템의 재사용 가능한 행동 계층(Reusable Behavioral Layer)으로 작동한다. 비전과 언어는 의미적 맥락을 제공하고, 고유감각은 현재의 체화체 상태를 설명하며, 정책은 이러한 입력을 다양한 작업에 걸친 구조화된 물리적 행동으로 변환한다. 원격조작과 이질적인 데이터셋은 공통 행동을 학습하기 위한 경험을 제공하고, 적응 절차(Adaptation Procedure)는 이러한 지식을 특정 로봇과 응용 분야에 특화한다.
+
+실질적인 목표는 휴머노이드 소프트웨어의 모든 구성요소를 하나의 신경망으로 대체하는 것이 아니라, 기능이 확장될수록 필요한 작업별 엔지니어링(Task-Specific Engineering)의 양을 줄일 수 있는 공유 정책을 구축하는 것이다. 전신 제어, 실시간 안정화, 안전 감독, 폐루프 인식(Closed-Loop Perception)과 결합된 다중 작업 일반화 정책은 개별적으로 시연된 기술에서 출발하여 학습된 물리적 지식을 점점 더 다양한 작업에 적응시킬 수 있는 휴머노이드로 발전하기 위한 확장 가능한 경로를 제공한다.
+
+## 08.07. Language Conditioned Humanoid Task Execution [w/Code]
+
+![](images/image7.png){width="7.268055555555556in" height="7.268055555555556in"}
+
+언어 조건부 휴머노이드 작업 실행(Language-Conditioned Humanoid Task Execution)은 로봇이 자연어 명령(Natural-Language Instruction)을 물리적 행동으로 변환하면서 해당 명령을 인식 정보와 신체 상태에 지속적으로 그라운딩(Grounding)할 수 있도록 한다. 휴머노이드 VLA 시스템에서 언어는 단순히 사전에 정의된 프로그램을 선택하는 역할을 하지 않는다. 언어는 시각 관측(Visual Observation), 고유감각(Proprioception), 작업 맥락(Task Context), 학습된 행동 표현(Action Representation)을 결합하는 일반화 정책(Generalist Policy)을 조건화하여 현재 환경에서 로봇이 무엇을 해야 하는지를 결정하도록 한다.
+
+자연어는 동일한 물리적 능력을 매우 다양한 형태로 요청할 수 있기 때문에 유연한 인터페이스를 제공한다. 사용자는 휴머노이드에게 상자를 집거나, 객체를 선반에 놓거나, 도구를 가져오거나, 용기를 열거나, 특정 물체를 다른 객체 옆으로 이동하도록 요청할 수 있다. 정책은 가능한 모든 문장을 개별적으로 프로그래밍된 행동과 연결하지 않고도 의도된 행동, 관련 객체, 공간적 관계(Spatial Relationship), 제약조건을 추출해야 한다.
+
+언어 그라운딩(Language Grounding)은 기호적 표현(Symbolic Expression)을 물리적 장면의 객체 및 관계와 연결한다. 명령이 "빨간색 용기", "위쪽 선반", "컵 옆의 물체"를 지칭하는 경우 시스템은 행동을 생성하기 전에 이에 해당하는 시각적 정보를 식별해야 한다. 비전-언어 표현(Vision-Language Representation)은 의미적 연관성을 제공하고, 공간 인식(Spatial Perception)은 언어적 지시를 물리적으로 의미 있는 목표로 변환하는 데 필요한 기하학적 구조와 상대 자세(Relative Pose) 정보를 제공한다.
+
+현재의 로봇 상태 역시 중요하다. 언어는 완전한 모터 궤적(Motor Trajectory)이 아니라 목표를 지정하기 때문이다. "부품을 트레이에 놓아라"라는 명령은 로봇의 팔 구성, 트레이까지의 거리, 파지 상태, 균형 상태를 명시하지 않는다. 따라서 고유감각 정보(Proprioceptive Information)는 언어 및 비전과 함께 정책을 조건화하며, 동일한 명령이라도 휴머노이드의 현재 물리적 구성에 따라 서로 다른 행동을 생성할 수 있도록 한다.
+
+명령 해석(Instruction Interpretation)에서는 모호성(Ambiguity)을 해결해야 할 수도 있다. 동일한 설명을 만족하는 객체가 여러 개 존재하거나 요청된 목적지가 부분적으로 가려져 있을 수 있다. 로봇은 시각적 맥락, 상호작용 이력(Interaction History), 작업 메모리(Task Memory), 추가적인 언어 정보를 사용하여 의도된 대상을 결정할 수 있다. 신뢰도가 충분하지 않은 경우 불확실한 물리적 행동을 실행하는 것보다 추가 설명을 요청하는 것이 바람직하며, 특히 잘못된 행동이 충돌이나 안전 위험을 발생시킬 수 있는 상황에서는 더욱 중요하다.
+
+언어 조건부 실행(Language-Conditioned Execution)은 서로 다른 추상화 수준에서 동작할 수 있다. 짧은 명령은 학습된 하나의 행동에 직접 대응할 수 있지만, 복잡한 요청은 여러 하위 목표(Subgoal)로 분해해야 할 수 있다. 예를 들어 객체를 전달하는 작업은 객체 위치 파악, 작업 공간 접근, 도달, 파지, 운반, 목적지 식별, 객체 배치, 해제 과정을 포함할 수 있다. 각 단계에서는 새로운 관측이 생성되며, 이러한 관측은 이후 실행 과정에 영향을 준다.
+
+일반화 VLA 정책(Generalist VLA Policy)은 각 하위 작업마다 독립적으로 학습된 정책을 호출하는 대신 이러한 행동을 하나의 공유 모델(Shared Model)에서 표현할 수 있다. 언어는 의미적 목표(Semantic Objective)를 제공하고, 시각 관측은 변화하는 환경을 설명하며, 행동 모델(Action Model)은 적절한 물리적 반응을 생성한다. 공유 표현(Shared Representation)을 사용하면 도달, 파지, 운반, 배치 작업에서 획득한 경험을 이러한 행동의 새로운 조합에 활용할 수 있다.
+
+명령의 의미는 작업 진행 상태(Task Progress)에 따라 달라지므로 시간적 맥락(Temporal Context)이 필요하다. 로봇이 이미 객체를 파지한 이후에는 남은 작업에 대한 적절한 해석이 객체와 접촉하기 이전의 해석과 달라진다. 관측 이력(Observation History), 이전 행동, 내부 작업 상태 표현(Internal Task-State Representation)은 정책이 이미 수행된 내용을 판단하는 데 도움을 준다. 이를 통해 완료된 단계를 반복적으로 실행하는 것을 방지하고 장시간 작업 시퀀스에서 일관된 행동을 유지할 수 있다.
+
+따라서 초기 명령과 관측으로부터 전체 장기 궤적(Long-Horizon Trajectory)을 한 번에 생성하는 것보다 폐루프 실행(Closed-Loop Execution)이 바람직하다. 정책은 짧은 행동 구간을 예측하고 이를 실행한 후 결과 상태를 관측하여 다음 행동 구간을 생성할 수 있다. 이러한 후퇴 지평 과정(Receding-Horizon Process)을 통해 휴머노이드는 객체 위치 변화, 파지 실패, 예상하지 못한 장애물, 사람의 움직임, 예측된 결과와 실제 물리적 결과 사이의 차이에 대응할 수 있다.
+
+행동 청킹(Action Chunking)은 이러한 과정을 구현하는 유용한 메커니즘을 제공한다. VLA 모델은 하나의 순간적인 명령을 생성하는 대신 시간적으로 연관된 여러 미래 행동을 예측할 수 있다. 행동 청크(Action Chunk)는 짧은 시간 범위에서 도달 동작, 손 닫기, 협응된 팔 움직임을 표현할 수 있다. 적절한 구간을 실행한 후 로봇은 갱신된 다중모달 관측(Multimodal Observation)을 획득하고 지속 중인 언어 명령을 조건으로 새로운 행동 청크를 생성한다.
+
+휴머노이드 작업 실행에서는 언어가 손뿐만 아니라 전신(Whole Body)에 영향을 주어야 하는 경우가 많다. 하나의 명령을 수행하기 위해 로봇은 작업대로 걸어가고, 신체 방향을 전환하고, 발 위치를 재조정하고, 몸통을 숙이고, 객체를 조작한 후 안정된 자세로 복귀해야 할 수 있다. VLA 정책은 협응된 작업 참조값(Task Reference)을 제공하고, 전용 보행 제어기(Locomotion Controller)와 전신 제어기(Whole-Body Controller)는 이러한 전환 과정 전체에서 동적 안정성(Dynamic Stability)을 유지할 수 있다.
+
+양손 작업(Bimanual Task)은 언어가 두 손에서 수행되는 행동 사이의 관계를 지정할 수 있기 때문에 추가적인 그라운딩 요구사항을 발생시킨다. 용기를 잡은 상태에서 뚜껑을 열거나, 하나의 부품을 고정하면서 다른 부품을 삽입하는 명령은 두 손에 서로 협응된 역할을 요구한다. 정책은 전체 신체에 걸쳐 상대 자세, 타이밍, 접촉, 힘 관계를 유지하면서 각 객체와 행동을 적절한 손에 연결해야 한다.
+
+공간 언어(Spatial Language)는 궁극적으로 기하학적 제약조건(Geometric Constraint)으로 변환되어야 한다. 위, 아래, 내부, 옆, 뒤, 마주보는 방향과 같은 표현은 정확한 로봇 좌표가 아니라 객체 간 관계를 설명한다. 인식 시스템과 장면 표현(Scene Representation)은 이러한 의미적 관계를 움직임을 유도할 수 있는 위치, 방향, 영역 또는 제약조건으로 변환해야 한다. 이후 실행 시스템은 환경의 기하학적 구조를 고려하면서 그라운딩된 목표를 실행 가능한 전신 궤적(Whole-Body Trajectory)으로 매핑한다.
+
+언어는 작업 목표뿐만 아니라 행동 제약조건(Behavioral Constraint)을 지정할 수도 있다. 사용자는 객체를 조심스럽게 이동하거나, 똑바로 세운 상태로 유지하거나, 두 손으로 들거나, 주변 물체와 접촉하지 않도록 배치할 것을 요청할 수 있다. 이러한 수정 표현(Modifier)은 궤적 생성, 파지 전략, 속도, 방향 또는 힘에 영향을 준다. 따라서 언어 조건부 정책은 주요 행동 동사와 대상 객체만 추출하는 것이 아니라 실행 과정 전체에서 관련 제약조건을 유지해야 한다.
+
+학습(Training)에는 언어적 설명을 관측 및 물리적 행동과 연결하는 시연이 필요하다. 원격조작 에피소드(Teleoperation Episode)는 사전에 정의된 명령, 작업자의 설명 또는 후처리된 주석(Post-Processed Annotation)과 연결할 수 있다. 동일한 행동에 대해 여러 설명을 사용하면 언어적 변형에 대한 강건성을 향상시킬 수 있으며, 서로 다른 장면에서 유사한 명령을 수행한 시연을 통해 정책은 언어 의미를 고정된 행동 시퀀스로 암기하는 대신 관측된 환경과 함께 해석해야 한다는 것을 학습할 수 있다.
+
+데이터셋에는 조합적 변화(Compositional Variation)도 포함되어야 한다. 모든 명령이 하나의 객체나 하나의 위치에서만 나타난다면 모델은 그라운딩된 의미론 대신 피상적인 상관관계를 학습할 수 있다. 학습 조합에서는 객체, 목적지, 초기 자세, 환경, 언어 표현을 다양하게 변화시켜야 한다. 이를 통해 정책은 행동, 객체 정체성(Object Identity), 공간 관계, 목적지와 같은 개념을 분리하여 익숙한 개념들을 이전에 보지 못한 구성으로 다시 조합할 수 있다.
+
+실패 복구(Failure Recovery)는 언어 조건부 장기 작업에서 특히 중요하다. 파지가 미끄러지거나, 서랍이 열리지 않거나, 객체가 예상하지 못하게 움직이거나, 계획된 경로가 차단될 수 있다. 정책은 관측된 결과가 예상된 작업 진행 상태와 다른 경우 이를 감지하고 적절한 복구 행동을 선택하거나 남은 시퀀스를 재계획(Replanning)해야 한다. 복구 시연(Recovery Demonstration)을 통해 첫 번째 실행 시도가 실패하더라도 언어 명령이 여전히 유효하다는 것을 모델이 학습하도록 할 수 있다.
+
+안전 감독(Safety Supervision)은 언어 명령의 해석과 실행을 제한해야 한다. 문법적으로 유효한 명령이라도 물리적으로 불가능하거나, 허용된 작업공간을 벗어나거나, 사람과 장비 주변에서 위험한 행동을 요구할 수 있다. 따라서 언어 이해(Language Understanding)가 제한 없는 액추에이터 움직임을 직접 승인해서는 안 된다. 관절 제한, 충돌 검사, 힘 제한, 균형 제약, 제한 구역(Restricted Region), 운영 규칙은 독립적인 안전 및 제어 계층에서 강제되어야 한다.
+
+실행 신뢰도(Execution Confidence)는 의미적 해석과 물리적 행동 사이에 또 다른 경계를 제공할 수 있다. 시스템은 움직임을 실행하기 전에 객체 그라운딩, 작업 해석 또는 행동 실행 가능성(Action Feasibility)의 불확실성을 추정할 수 있다. 신뢰도가 높은 명령은 정상적으로 진행하고, 불확실한 경우에는 추가 인식, 느린 실행, 추가 설명 요청 또는 인간 개입(Human Intervention)을 수행할 수 있다. 이는 언어가 익숙하지 않은 객체나 모호한 공간 관계를 지칭하는 경우 특히 유용하다.
+
+평가(Evaluation)는 언어 이해와 물리적 작업 완료 능력을 모두 시험해야 한다. 휴머노이드가 요청된 객체를 올바르게 식별했지만 파지에 실패할 수도 있으며, 성공적으로 조작을 수행했지만 공간적 제약을 잘못 이해했을 수도 있다. 따라서 평가에서는 표현 방식, 객체 종류, 장면 배치, 초기 신체 구성, 작업 길이를 변화시키면서 그라운딩 정확도(Grounding Accuracy), 완료율, 복구 행동, 안전 위반, 실행 효율성, 환경 변화에 대한 대응성을 측정해야 한다.
+
+조합적 평가(Compositional Evaluation)는 언어 조건부 일반화(Language-Conditioned Generalization)를 측정하는 특히 강력한 방법이다. 집기, 열기, 운반, 배치를 각각 학습한 로봇에게 이러한 개념을 익숙하지 않은 시퀀스로 결합한 새로운 명령을 제공하여 시험할 수 있다. 성공적인 실행은 정책이 암기된 명령을 고정된 궤적과 연결하는 데 그치지 않고 언어, 인식, 행동 사이의 재사용 가능한 관계를 학습했다는 것을 의미한다.
+
+궁극적으로 언어 조건부 작업 실행은 일반화 휴머노이드(Generalist Humanoid)를 위한 의미적 제어 인터페이스(Semantic Control Interface)를 제공한다. 언어는 인간의 의도를 표현하고, 다중모달 인식(Multimodal Perception)은 이러한 의도를 물리적 세계에 그라운딩하며, 고유감각은 로봇의 현재 능력과 상태를 나타내고, VLA 정책은 이를 구조화된 행동으로 변환한다. 폐루프 관측과 재계획은 작업 진행을 유지하고, 전신 제어는 학습된 참조값을 물리적으로 실행 가능한 움직임으로 변환한다.
+
+따라서 실용적인 아키텍처는 유연한 언어 이해와 결정론적인 물리적 실행 경계(Deterministic Physical Execution Boundary)를 결합한다. 일반화 정책은 다양한 명령을 해석하고 여러 작업에서 학습된 기술을 재사용할 수 있으며, 보행 제어, 전신 제어, 충돌 회피(Collision Avoidance), 실시간 안정화(Real-Time Stabilization), 안전 감독은 신뢰성 있는 동작을 유지한다. 이러한 통합을 통해 언어 해석 자체를 제한 없는 저수준 로봇 제어로 취급하지 않으면서도 자연어가 점점 더 높은 능력을 가진 휴머노이드 행동을 안내할 수 있다.
+
+## 08.08. VLA Inference on Humanoid Onboard Computer [w/Code]
+
+![](images/image8.png){width="7.268055555555556in" height="7.268055555555556in"}
+
+온보드 VLA 추론(Onboard VLA Inference)은 휴머노이드 로봇이 원격 클라우드 서버에 지속적으로 의존하는 대신 로봇에 물리적으로 통합된 컴퓨팅 자원을 사용하여 비전-언어-행동 정책(Vision-Language-Action Policy)을 실행할 수 있도록 한다. 이러한 아키텍처는 통신 의존성을 줄이고 네트워크 성능이 저하되는 상황에서도 인식, 언어 조건부 추론(Language-Conditioned Reasoning), 행동 생성을 지속할 수 있도록 한다. 핵심 과제는 대규모 다중모달 정책(Multimodal Policy)을 연산 성능, 메모리, 전력, 열 관리 능력, 응답 지연시간이라는 엄격한 제약 안에서 실행하는 것이다.
+
+휴머노이드 온보드 컴퓨터(Onboard Computer)는 여러 워크로드를 동시에 지원해야 한다. 카메라 처리, 상태 추정(State Estimation), 위치 추정(Localization), 인식, VLA 추론, 모션 계획(Motion Planning), 전신 제어(Whole-Body Control), 진단(Diagnostics), 통신이 CPU, GPU, 가속기(Accelerator), 메모리 자원을 놓고 경쟁할 수 있다. 따라서 VLA 배포는 독립적인 벤치마크처럼 최적화해서는 안 된다. VLA 추론 스케줄은 의미적 추론보다 더 엄격한 시간 요구조건을 가지는 경우가 많은 안전 핵심 및 실시간 프로세스(Safety-Critical and Real-Time Process)와 공존해야 한다.
+
+추론 파이프라인(Inference Pipeline)은 동기화된 다중모달 관측(Multimodal Observation)을 수집하는 것으로 시작한다. 머리 카메라, 손목 카메라, 깊이 센서, 고유감각 상태(Proprioceptive State), 작업 명령, 최근 행동 이력이 정책 입력을 구성할 수 있다. 이러한 데이터 스트림은 서로 다른 주기로 동작하므로 온보드 시스템에는 타임스탬프 정렬(Timestamp Alignment), 버퍼링(Buffering), 전처리(Preprocessing), 가장 관련성이 높은 관측의 선택 과정이 필요하다. 시간 정렬이 잘못되면 모델은 더 이상 로봇의 현재 물리적 상태와 일치하지 않는 시각 정보를 기반으로 행동을 생성할 수 있다.
+
+시각 처리(Visual Processing)는 여러 개의 고해상도 카메라 스트림이 각 추론 주기에서 정책이 실제로 필요로 하는 것보다 훨씬 많은 데이터를 생성할 수 있기 때문에 전체 계산 부하의 상당 부분을 차지한다. 따라서 이미지는 비전 인코더(Vision Encoder)에 입력되기 전에 크기 조정, 자르기(Cropping), 정규화(Normalization), 선택적 샘플링을 수행할 수 있다. 변화가 느린 시점의 특징은 적절한 경우 재사용할 수도 있다. 효율적인 시각 전처리는 VLA 모델에 제공되는 의미적 작업 인터페이스를 변경하지 않으면서 메모리 이동과 가속기 연산 부하를 줄인다.
+
+언어 맥락(Language Context)은 일반적으로 센서 관측보다 느리게 변화한다. 하나의 작업 명령은 로봇이 환경을 반복적으로 관측하고 새로운 행동을 생성하는 동안 수초에서 수분까지 유효하게 유지될 수 있다. 따라서 토큰화된 언어 표현(Tokenized Language Representation)이나 중간 의미 특징(Intermediate Semantic Feature)을 모든 제어 업데이트마다 다시 계산하지 않고 캐시(Cache)하여 사용할 수 있다. 느리게 변화하는 의미적 맥락과 빠르게 변화하는 물리적 상태를 분리하는 것은 효율적인 휴머노이드 VLA 추론에서 중요하다.
+
+모델 분할(Model Partitioning)은 의미적 추론과 모터 행동 생성(Motor Generation)이 서로 다른 시간적 요구조건을 가진다는 특성을 활용할 수 있다. 대규모 비전-언어 백본(Vision-Language Backbone)은 중간 정도의 주기로 맥락 특징(Contextual Feature)을 갱신하고, 더 작은 행동 전문가(Action Expert)는 연속적인 행동을 더 높은 주기로 생성할 수 있다. 이러한 이중 주기 아키텍처(Dual-Rate Architecture)는 불필요한 계산을 줄이며 숙고적 추론(Deliberative Reasoning)과 빠른 감각운동 반응(Sensorimotor Response)을 분리하는 구조와 유사하다. 정확한 주기는 작업 동역학, 모델 크기, 사용 가능한 온보드 하드웨어에 따라 결정된다.
+
+행동 청킹(Action Chunking)은 필요한 VLA 추론 주기를 더욱 낮출 수 있다. 모델을 한 번 평가할 때 하나의 액추에이터 관련 명령만 예측하는 대신 정책은 짧은 시간 범위를 포함하는 미래 행동 참조값의 시퀀스를 생성할 수 있다. 로봇은 다음 관측이 준비되는 동안 이 시퀀스의 일부를 실행한다. 이러한 방식은 비용이 높은 다중모달 추론을 여러 제어 주기에 분산하면서 누적된 예측 오차가 지나치게 커지기 전에 재계획(Replanning)할 수 있는 능력을 유지한다.
+
+VLA 추론 주기(Inference Rate)를 로봇의 저수준 제어 주기(Low-Level Control Frequency)와 동일하게 생각해서는 안 된다. 휴머노이드는 관절 서보(Joint Servo), 균형 또는 토크 조절을 수백 헤르츠 또는 그 이상의 주기로 수행해야 할 수 있지만, 대규모 다중모달 모델은 훨씬 낮은 주기로 동작할 수 있다. 따라서 학습된 행동 출력은 VLA 업데이트 사이에서도 결정론적으로 실행되면서 안정적인 물리적 행동을 유지할 수 있는 보간(Interpolation), 임피던스 제어(Impedance Control), 궤적 추종(Trajectory Tracking), 전신 제어 계층으로 전달되어야 한다.
+
+메모리 용량(Memory Capacity)은 모델 파라미터가 런타임 메모리 소비의 일부에 불과하기 때문에 중요한 배포 제약조건이다. 비전 특징, 어텐션 캐시(Attention Cache), 임시 텐서(Temporary Tensor), 행동 이력, 카메라 버퍼, 기타 로봇 프로세스도 메모리를 사용한다. 인공적인 단독 시험에서 가속기 메모리에 들어가는 모델이라도 전체 휴머노이드 소프트웨어 스택이 활성화되면 실행되지 않을 수 있다. 따라서 배포 검증에서는 실제와 유사한 동시 워크로드(Concurrent Workload) 조건에서 최대 메모리 사용량(Peak Memory Consumption)을 측정해야 한다.
+
+저정밀도 추론(Reduced-Precision Inference)은 메모리 사용량을 줄이고 처리량(Throughput)을 증가시키는 주요 기술 중 하나이다. 모델 정확도가 허용되는 범위에서 가중치와 활성값(Activation)을 더 낮은 수치 정밀도로 표현할 수 있다. 양자화(Quantization)는 저장공간과 메모리 대역폭 요구량을 더욱 감소시킬 수 있지만, 지나치게 강한 압축은 시각 그라운딩(Visual Grounding)이나 연속 행동 품질을 저하시킬 수 있다. 따라서 각 정밀도 구성은 언어 모델 벤치마크만이 아니라 실제 물리 작업 성능 지표를 이용하여 검증해야 한다.
+
+모델 컴파일(Model Compilation)과 최적화된 추론 런타임(Optimized Inference Runtime)은 연산을 융합하고, 효율적인 커널(Kernel)을 선택하며, 메모리 복사를 최소화하고, 대상 가속기 아키텍처를 활용함으로써 오버헤드를 감소시킬 수 있다. 카메라 해상도, 토큰 길이, 행동 지평(Action Horizon)이 알려진 경우 고정되거나 제한된 텐서 형상(Tensor Shape)을 사용하면 최적화가 단순해질 수 있다. 신경망 내부의 성능을 향상시켜도 데이터 변환이나 전송 비용이 크다면 효과가 제한되므로 배포 파이프라인은 전처리, 모델 실행, 후처리를 하나의 지연시간 경로(Latency Path)로 다루어야 한다.
+
+비동기 실행(Asynchronous Execution)은 휴머노이드 컴퓨터에서 특히 유용하다. 카메라 획득(Camera Acquisition), 시각 인코딩, VLA 추론, 행동 실행, 로깅(Logging)은 서로를 완전히 차단하면서 순차적으로 동작할 필요가 없다. 타임스탬프가 포함된 버퍼와 신중하게 제어된 동기화 지점을 이용하면 별도의 파이프라인이 동시에 동작할 수 있다. 로봇이 현재 행동 청크를 실행하는 동안 시스템은 다음 관측을 준비하고 추론을 시작할 수 있어 가속기의 유휴 시간을 줄이고 실질적인 응답 지연시간을 개선할 수 있다.
+
+그러나 스케줄링(Scheduling)은 실시간 제어가 자원 경쟁(Resource Contention)의 영향을 받지 않도록 보호해야 한다. VLA 프로세스가 일시적으로 사용 가능한 GPU, CPU 또는 메모리 대역폭을 모두 사용하면 안전 운용에 필요한 인식 또는 제어 구성요소를 방해할 수 있다. 자원 우선순위(Resource Priority), 전용 연산 파티션(Dedicated Compute Partition), 제한된 큐(Bounded Queue), 감시 메커니즘(Watchdog Mechanism)을 통해 의미적 추론이 핵심 프로세스의 자원을 고갈시키는 것을 방지할 수 있다. VLA 정책은 중요한 워크로드이지만 로봇에서 가장 높은 권한을 가진 프로세스로 취급해서는 안 된다.
+
+열 및 전력 제한(Thermal and Electrical Limit) 역시 추론 아키텍처의 일부이다. 지속적인 다중모달 추론은 장시간 높은 가속기 사용률을 유지하면서 열을 발생시키고, 보행과 조작에 사용할 수 있는 배터리 에너지를 소비한다. 따라서 짧은 벤치마크 실행은 실제 배포 조건을 제대로 나타내지 못한다. 평가에서는 장시간의 물리적 운용 중 지속 처리량(Sustained Throughput), 온도, 전력 소비, 주파수 스로틀링(Frequency Throttling), 남아 있는 제어 성능을 측정해야 한다.
+
+지연시간(Latency)은 센서 데이터가 사용 가능해지는 시점부터 실제 사용할 수 있는 행동 출력이 생성되는 시점까지 종단간(End-to-End)으로 측정해야 한다. 여기에는 이미지 획득 지연, 동기화, 전처리, 호스트-장치 전송(Host-to-Device Transfer), 모델 실행, 행동 디코딩(Action Decoding), 안전 검사, 제어기 전달이 포함된다. 평균 추론 시간만으로는 충분하지 않다. 간헐적으로 발생하는 지연시간 급증이 약간 더 높지만 예측 가능한 지연보다 물리적 상호작용에 더 큰 영향을 줄 수 있기 때문이다. 따라서 꼬리 지연시간(Tail Latency)과 타이밍 지터(Timing Jitter)를 명시적으로 모니터링해야 한다.
+
+필요한 지연시간은 작업 특성에 크게 의존한다. 느린 객체 재배치 작업은 비교적 낮은 빈도의 의미적 업데이트를 허용할 수 있지만, 동적인 물체 전달(Dynamic Handover), 접촉이 많은 조작(Contact-Rich Manipulation), 움직이는 사람과의 상호작용에서는 더 빠른 적응이 필요하다. 시스템은 작업 단계에 따라 서로 다른 추론 모드를 사용할 수 있으며, 중요한 상호작용에서는 업데이트 주기를 높이고 안정적인 운반이나 대기 단계에서는 낮출 수 있다. 적응형 스케줄링(Adaptive Scheduling)은 필요한 부분의 응답성을 유지하면서 효율성을 향상시킬 수 있다.
+
+안전 검사(Safety Checking)는 VLA 추론 속도와 독립적으로 유지되어야 한다. 생성된 모든 행동 청크는 실행 전에 관절 제한, 충돌 검사, 속도 및 가속도 제한, 힘 제한, 작업공간 경계, 균형 조건을 포함하는 결정론적 제약조건(Deterministic Constraint)을 통과해야 한다. 추론을 사용할 수 없거나 정해진 시간 제한을 초과한 경우 로봇은 오래된 행동(Stale Action)을 무기한 계속 실행해서는 안 된다. 타임아웃(Timeout)이 발생하면 자세 유지, 제어된 정지(Controlled Stop), 또는 사전에 정의된 폴백 행동(Fallback Behavior)을 실행할 수 있다.
+
+온보드 실행은 카메라 스트림과 로봇 상태를 외부 인프라로 지속적으로 전송할 필요가 없기 때문에 개인정보 보호(Privacy)와 운영 회복탄력성(Operational Resilience)을 향상시킨다. 이는 민감한 시각 정보를 포함할 수 있는 공장, 연구실, 가정 및 기타 환경에서 중요할 수 있다. 네트워크 연결은 모델 업데이트, 플릿 학습(Fleet Learning), 원격 진단, 고수준 서비스에 계속 활용할 수 있지만 외부 통신을 사용할 수 없는 경우에도 즉각적인 물리적 제어 기능은 유지된다.
+
+일부 추론 작업이 온보드 자원의 한계를 초과하는 경우 하이브리드 엣지-클라우드 아키텍처(Hybrid Edge-Cloud Architecture)를 사용할 수 있다. 온보드 정책은 시간에 민감한 인식과 행동 생성을 유지하고, 원격 컴퓨팅은 비핵심 계획, 대규모 맥락 추론(Large-Context Reasoning), 데이터셋 처리, 모델 개선을 담당할 수 있다. 이 경계는 통신이 끊어지더라도 선택적 기능만 감소하고 로봇의 자체 안정화, 안전 정지 또는 기본적인 로컬 행동 수행 능력은 유지되도록 설계해야 한다.
+
+프로파일링(Profiling)은 개발용 워크스테이션에서만 수행하는 것이 아니라 실제 대상 로봇 전체에서 수행해야 한다. 측정 항목에는 모델 로딩 시간, 웜 및 콜드 추론(Warm and Cold Inference), 가속기 사용률, 메모리 압력(Memory Pressure), 카메라 파이프라인 비용, 동시 제어기 부하, 전력 소비, 열적 거동이 포함되어야 한다. 메모리 단편화(Memory Fragmentation), 열 스로틀링(Thermal Throttling), 누적된 큐 지연은 장시간 운용 이후에만 나타날 수 있으므로 시험은 실제적인 에피소드 지속시간도 재현해야 한다.
+
+배포 평가(Deployment Evaluation)는 컴퓨팅 성능 지표를 실제 로봇 성능과 연결해야 한다. 높은 추론 처리량은 작업 성공률, 응답성 또는 강건성(Robustness)을 향상시키는 경우에만 의미가 있다. 따라서 적절한 측정 항목에는 종단간 지연시간, 행동 업데이트 주기, 작업 완료율, 복구 능력, 궤적 부드러움(Trajectory Smoothness), 안전 개입(Safety Intervention), 에너지 소비, 지속 운용시간이 포함된다. 모델 최적화는 단순히 신경망 처리량을 최대화하는 것이 아니라 사용 가능한 컴퓨팅 한계(Computing Envelope) 안에서 최상의 물리적 행동을 달성하는 것을 목표로 해야 한다.
+
+궁극적으로 온보드 VLA 추론은 대규모 다중모달 지능(Large Multimodal Intelligence)과 물리적 휴머노이드 운용의 엄격한 시간 요구조건을 연결하는 가교를 형성한다. 효율적인 시각 처리, 캐시된 의미적 맥락(Cached Semantic Context), 저정밀도 연산, 최적화된 런타임, 비동기 파이프라인, 행동 청킹을 통해 높은 계산 비용을 요구하는 학습 모델을 제한된 하드웨어 환경에서 실행할 수 있다. 실시간 제어기는 상대적으로 느린 의미적 정책 아래에서 빠르고 결정론적인 응답을 유지한다.
+
+따라서 실용적인 휴머노이드 아키텍처는 온보드 VLA 모델을 다중 주기 컴퓨팅 계층 구조(Multi-Rate Computing Hierarchy)의 하나의 구성요소로 다룬다. 모델은 의미적 그라운딩(Semantic Grounding)과 일반화 행동 생성(Generalist Action Generation)을 수행하고, 인식 서비스, 전신 제어, 안전 감독(Safety Supervision), 액추에이터 루프(Actuator Loop)는 각각의 기능에 적합한 주기로 동작한다. 신중한 자원 격리(Resource Isolation)와 지연시간 관리를 통해 더욱 강력한 VLA 정책을 로컬에서 실행하면서도 신뢰성 있는 물리적 실행에 필요한 안정성과 예측 가능성을 유지할 수 있다.
+
+## 08.09. Humanoid VLA Safety Override and Fallback [w/Code]
+
+![](images/image9.png){width="7.268055555555556in" height="7.268055555555556in"}
+
+휴머노이드 VLA 안전 오버라이드 및 폴백 아키텍처(Humanoid VLA Safety Override and Fallback Architecture)는 학습된 비전-언어-행동 정책(Vision-Language-Action Policy)이 물리적 실행에 대해 제한 없는 권한을 갖지 못하도록 한다. 일반화 정책(Generalist Policy)은 다양한 작업에서 유용한 행동을 생성할 수 있지만, 그 예측은 확률적이며 익숙하지 않은 장면, 모호한 명령, 센서 고장 또는 분포 변화(Distribution Shift) 상황에서 신뢰성이 저하될 수 있다. 따라서 독립적인 안전 메커니즘(Independent Safety Mechanism)이 학습된 행동 생성과 액추에이터 실행 사이의 모든 단계를 감독해야 한다.
+
+기본적인 설계 원칙은 지능형 작업 행동(Intelligent Task Behavior)과 안전 권한(Safety Authority)을 분리하는 것이다. VLA 정책은 의미적 목표(Semantic Goal), 조작 전략(Manipulation Strategy), 짧은 행동 시퀀스를 결정할 수 있지만, 결정론적 안전 계층(Deterministic Safety Layer)은 이러한 출력을 수정, 거부, 중단 또는 대체할 수 있는 권한을 유지한다. 이러한 분리는 모델의 능력이 향상되더라도 로봇의 기본적인 물리적 제약이 약화되지 않도록 하며, 학습된 정책이 실패하는 경우에도 안전 기능이 계속 작동할 수 있도록 한다.
+
+안전 감독(Safety Supervision)은 행동을 생성하기 전에 로봇의 현재 운용 상태(Operating State)를 검증하는 것에서 시작된다. 새로운 VLA 명령을 받아들이기 전에 센서 가용성, 위치 추정 품질(Localization Quality), 관절 상태, 액추에이터 상태, 통신 상태, 배터리 상태, 제어기 준비 상태를 검사할 수 있다. 핵심 정보가 누락되거나 일관되지 않은 경우 시스템은 적극적인 물리적 행동을 요청하지 않고 정지 상태를 유지하거나, 제한된 운용 모드(Restricted Operating Mode)로 전환하거나, 사전에 정의된 복구 절차(Recovery Procedure)를 시작해야 한다.
+
+언어 조건부 작업(Language-Conditioned Task)에서는 문법적으로 유효한 자연어 명령이 반드시 유효한 로봇 명령을 의미하지 않기 때문에 의미적 안전 검사(Semantic Safety Checking)가 필요하다. 명령이 존재하지 않는 객체를 지칭하거나, 허용된 작업공간 밖의 움직임을 요구하거나, 운영 규칙과 충돌하거나, 안전이 중요한 상황에서 모호할 수 있다. 따라서 시스템은 명령을 이해하는 것과 그 실행을 승인하는 것을 구분해야 한다. 의미적 해석은 의도를 제안할 수 있지만, 감독 계층(Supervisory Layer)이 해당 의도의 실행 허용 여부를 결정해야 한다.
+
+행동 수준 검증(Action-Level Validation)은 VLA 정책이 생성한 궤적 또는 행동 청크(Action Chunk)가 하위 제어기에 전달되기 전에 이를 검사한다. 관절 위치, 속도, 가속도, 작업공간 목표(Workspace Target), 손 명령을 알려진 제한값과 비교할 수 있다. 유효하지 않은 수치, 불연속성, 과도한 변화 또는 도달할 수 없는 목표를 포함하는 예측은 거부하거나 수정해야 한다. 이러한 검사는 내부 추론 과정이 물리적 제약조건을 만족한다고 가정할 수 없는 정책 주위에 결정론적 경계(Deterministic Boundary)를 제공한다.
+
+충돌 안전(Collision Safety)은 로봇 자체와 주변 환경을 모두 검사해야 한다. 예측된 팔 또는 전신 궤적(Whole-Body Trajectory)은 개별 관절값이 유효하더라도 자기 충돌(Self-Collision)을 발생시킬 수 있다. 환경 충돌 검사(Environmental Collision Checking)는 인식 시스템이 표현하는 설비, 도구, 가구, 장비 및 기타 장애물도 고려해야 한다. 예측된 움직임이 필요한 이격 거리(Separation Distance)를 위반하면 안전 계층은 실행을 중지하거나 궤적을 수정하거나 재계획(Replanning)을 요청할 수 있다.
+
+사람과의 근접 상황(Human Proximity)은 행동 실행 중에도 환경이 변화할 수 있기 때문에 더욱 엄격한 제약조건을 요구한다. 행동 청크가 이미 생성된 이후에도 사람이 로봇의 작업공간으로 들어올 수 있다. 따라서 인식 기반 안전 모니터링(Perception-Based Safety Monitoring)은 궤적을 한 번만 검증하는 것이 아니라 행동이 실행되는 동안 지속되어야 한다. 사람의 위치 변화는 평가된 위험 수준에 따라 속도 감소, 이격 거리 증가, 일시 정지, 재계획 또는 즉각적인 실행 중단을 유발할 수 있다.
+
+휴머노이드의 균형(Balance)은 고정 베이스 매니퓰레이터(Fixed-Base Manipulator)에는 존재하지 않는 추가적인 안전 요소를 만든다. 하나의 행동이 충돌을 일으키지 않더라도 질량중심(Center of Mass)을 사용 가능한 지지 영역 밖으로 이동시키거나 과도한 운동량(Momentum)을 발생시키면 동역학적으로 위험할 수 있다. 전신 안전 검사(Whole-Body Safety Check)는 지지 접촉(Support Contact), 균형 상태, 관절 토크 성능, 마찰 제약조건, 예상되는 신체 움직임을 평가해야 한다. 안전하지 않은 VLA 참조값은 동역학적으로 실행 가능한 명령으로 투영(Projection)하거나 로봇을 불안정하게 만들기 전에 거부할 수 있다.
+
+접촉이 많은 조작(Contact-Rich Manipulation)에서는 기하학적 구조뿐 아니라 힘도 모니터링해야 한다. 삽입, 밀기, 열기, 들어 올리기, 물체 전달 작업에서는 계획된 궤적이 유효해 보이더라도 예상하지 못한 접촉이 발생할 수 있다. 힘-토크 센서(Force-Torque Sensor), 촉각 센싱(Tactile Sensing), 모터 전류, 추정 외력 렌치(Estimated External Wrench)는 비정상적인 상호작용을 탐지하는 정보를 제공할 수 있다. 측정된 상호작용이 예상 범위를 벗어나면 임계값과 접촉 상태 로직(Contact-State Logic)을 이용해 명령된 움직임을 줄이거나, 힘을 해제하거나, 후퇴하거나, 작업을 정지할 수 있다.
+
+안전 오버라이드(Safety Override)는 하나의 비상 메커니즘에만 의존하지 않고 여러 수준에서 동작해야 한다. 경미한 위반은 속도를 제한하거나, 목표를 수정하거나, 행동을 실행 가능한 영역(Feasible Region)으로 투영하여 처리할 수 있다. 더 심각한 조건에서는 현재 행동 청크를 취소하고 재계획을 요청할 수 있다. 치명적인 이벤트에서는 즉시 보호 상태(Protective State)로 전환해야 한다. 이러한 단계적 대응(Graduated Response)은 유용한 자율성을 유지하면서 심각한 위험에 더 빠르고 강력하게 개입할 수 있도록 한다.
+
+폴백 행동(Fallback Behavior)은 단순히 학습된 정책을 정지시키는 것을 넘어 오버라이드 이후 무엇을 수행할지를 정의한다. 가장 안전한 대응은 로봇의 물리적 상태에 따라 달라진다. 서 있는 휴머노이드는 자세를 유지할 수 있고, 객체를 운반하는 로봇은 파지를 유지해야 할 수 있으며, 동역학적으로 불안정한 로봇은 정지하기 전에 복구 스텝(Recovery Step)이 필요할 수 있다. 따라서 폴백 정책(Fallback Policy)은 상태 인식형(State-Aware)으로 설계되어야 하며, 하나의 범용 정지 명령으로 취급하는 대신 보행, 조작, 전신 제어와 함께 설계해야 한다.
+
+제어된 유지(Controlled Hold)는 환경이 일시적으로 불확실하지만 현재 자세가 안정적인 경우 유용하다. VLA 정책의 실행을 일시 중단하는 동안 실시간 제어기(Real-Time Controller)는 관절 위치, 균형, 필요한 접촉력을 유지한다. 이후 인식 시스템이 환경을 다시 평가한 후 실행을 재개할 수 있다. 오래된 행동(Stale Action)을 계속 실행하는 것보다 자세를 유지하는 것이 바람직하지만, 현재 구성을 유지하는 것 자체가 과도한 힘, 불안정성 또는 충돌 위험을 발생시키는 경우에는 이를 사용해서는 안 된다.
+
+제어된 후퇴(Controlled Retreat)는 조작 실패에 사용할 수 있는 또 다른 폴백이다. 예상하지 못한 접촉, 낮은 파지 품질(Grasp Quality), 불확실한 객체 움직임이 감지되면 로봇은 즉시 새로운 학습 행동을 생성하는 대신 이전에 검증된 구성으로 이동할 수 있다. 후퇴 궤적(Retreat Trajectory)은 알려진 안전 영역 안에서 유지되도록 제한할 수 있다. 이를 통해 국부적인 조작 실패에서 벗어나는 결정론적 탈출 메커니즘(Deterministic Escape Mechanism)을 제공하고, 이후 VLA 정책이 다시 계획할 수 있는 안정된 상태를 확보할 수 있다.
+
+휴머노이드에는 균형 복구 폴백(Balance-Recovery Fallback)도 필요하다. 외부 외란(External Disturbance), 잘못된 발걸음, 객체로부터 전달되는 힘 또는 부적절한 상체 명령은 로봇을 불안정 상태로 밀어낼 수 있다. 빠른 균형 제어기는 파운데이션 모델(Foundation Model)의 추론을 기다리지 않고 즉시 대응해야 한다. 복구 스테핑(Recovery Stepping), 자세 조정, 운동량 조절(Momentum Regulation), 제어된 하강(Controlled Descent)이 일시적으로 VLA 명령보다 높은 제어 권한을 가질 수 있다. 학습된 정책은 로봇이 검증된 운용 상태로 복귀한 이후에만 실행을 재개해야 한다.
+
+추론 실패(Inference Failure) 자체도 안전 이벤트로 취급해야 한다. VLA 프로세스가 시간 제한을 초과하거나, 메모리가 부족하거나, 유효하지 않은 출력을 반환하거나, 하드웨어 또는 소프트웨어 고장으로 사용할 수 없게 될 수 있다. 로봇은 안전을 유지하기 위해 유효한 신경망 예측을 반드시 받아야 하는 구조로 설계해서는 안 된다. 감시 장치(Watchdog)는 마감시간 누락이나 프로세스 실패를 탐지하고 제어 권한을 결정론적 자세 유지, 정지 또는 복구 행동으로 전환할 수 있다.
+
+행동 청킹(Action Chunking)을 사용하는 경우 오래된 행동 탐지(Stale Action Detection)가 특히 중요하다. 이전에 생성된 시퀀스는 객체가 움직이거나, 사람이 작업공간에 진입하거나, 로봇이 예상 궤적에서 벗어난 이후에는 더 이상 적절하지 않을 수 있다. 따라서 각 행동 청크에는 유효 조건(Validity Condition)이나 최대 실행 유효시간(Maximum Execution Age)을 설정할 수 있다. 인식 또는 상태가 크게 변화하면 남은 명령을 무효화하고 시퀀스를 그대로 완료하는 대신 새로운 추론이나 폴백을 시작해야 한다.
+
+불확실성(Uncertainty)은 보수적인 행동을 유발하는 추가적인 조건으로 활용할 수 있다. 객체 식별, 언어 그라운딩(Language Grounding), 깊이 추정, 파지 상태 또는 행동 실행 가능성(Action Feasibility)에 대한 낮은 신뢰도는 정책이 신뢰할 수 있는 조건 밖에서 동작하고 있음을 나타낼 수 있다. 시스템은 항상 예측을 강제로 실행하는 대신 추가 관측을 수집하거나, 움직임을 느리게 하거나, 추가 설명을 요청하거나, 재계획하거나, 인간 작업자에게 제어를 전환할 수 있다. 따라서 불확실성은 단순한 진단 지표가 아니라 운영 신호(Operational Signal)가 된다.
+
+복구(Recovery)는 작업 상태(Task State)에 명시적으로 표현되어야 한다. 오버라이드 이후 시스템은 원래의 명령이 여전히 유효한지, 조작 대상 객체의 상태가 변경되었는지, 작업을 재개하거나 처음부터 다시 시작하거나 종료해야 하는지를 판단해야 한다. 맥락을 갱신하지 않은 상태에서 단순히 VLA 정책으로 제어 권한을 반환하면 동일한 실패가 반복될 수 있다. 따라서 복구 로직(Recovery Logic)은 갱신된 관측과 개입 결과(Intervention Outcome)를 명확하게 표현하여 정책에 제공해야 한다.
+
+인간 개입(Human Intervention)은 자율 기능 범위를 벗어난 상황에서 중요한 폴백으로 유지된다. 원격 감독(Remote Supervision)을 통해 작업자는 장면을 확인하고, 명령을 명확하게 하거나, 어려운 구간을 원격조작하거나, 작업 종료를 승인할 수 있다. 자율 명령과 인간 명령이 서로 경쟁하지 않도록 제어 권한 전환(Control Transfer)은 명확하게 이루어져야 한다. 개입 전후의 이벤트도 기록해야 하며, 이는 이후 실패 분석(Failure Analysis)과 정책 개선에 중요한 사례를 제공한다.
+
+로깅 및 추적성(Logging and Traceability)은 안전 아키텍처를 검증하는 데 필수적이다. 시스템은 원래의 VLA 출력, 안전 검사 결과, 수정된 명령, 오버라이드 원인, 로봇 상태, 관련 센서 데이터, 폴백 행동, 최종 결과를 기록해야 한다. 이러한 기록을 통해 엔지니어는 실패가 인식, 언어 그라운딩, 행동 생성, 제어 또는 안전 로직 중 어디에서 시작되었는지를 판단할 수 있으며, 소프트웨어 또는 모델 업데이트 이후 회귀 시험(Regression Testing)에 사용할 수 있는 구조화된 데이터를 확보할 수 있다.
+
+안전 검증(Safety Validation)은 성공적인 작업 실행만 평가하는 것이 아니라 비정상적인 조건을 의도적으로 시험해야 한다. 시험 시나리오에는 모호한 명령, 센서 스트림 누락, 추론 지연, 유효하지 않은 행동, 예상하지 못한 장애물, 움직이는 사람, 과도한 접촉력, 파지 실패, 균형 외란, 제어기 고장이 포함될 수 있다. 목표는 위험한 행동을 탐지하는 능력뿐 아니라 로봇이 적절한 폴백 상태로 예측 가능하게 전환하는지를 검증하는 것이다.
+
+VLA 정책과 안전 아키텍처는 새로운 파운데이션 모델을 도입하더라도 모든 보호 메커니즘을 다시 설계하지 않아도 될 정도로 서로 독립적으로 발전할 수 있어야 한다. 모델 업데이트를 통해 추론 능력과 작업 성공률이 향상될 수 있지만, 결정론적 제약조건, 감시 장치, 비상 정지(Emergency Stop), 균형 복구, 액추에이터 보호 기능은 안정적인 인터페이스로 유지되어야 한다. 이러한 모듈성(Modularity)을 통해 이전에 검증된 물리적 안전 범위(Physical Safety Envelope) 안에서 새로운 학습 정책을 평가할 수 있다.
+
+따라서 실용적인 휴머노이드 시스템은 계층화된 권한 구조(Layered Authority)를 사용한다. VLA 정책은 행동을 제안하고, 작업 및 모션 감독기(Task and Motion Supervisor)는 의도와 궤적을 검증하며, 전신 제어기는 물리적 실행 가능성(Physical Feasibility)을 강제하고, 독립적인 안전 메커니즘은 실행을 오버라이드할 수 있는 권한을 유지한다. 정상적인 자율 동작을 계속할 수 없는 경우 폴백 상태는 결정론적인 대응을 제공한다. 하나의 학습 구성요소가 작업 성능의 극대화와 물리적 안전 보장을 동시에 전적으로 책임지지 않는다.
+
+궁극적으로 휴머노이드 VLA 안전은 실패를 예외적인 사건이 아니라 예상되는 운용 조건(Expected Operating Condition)으로 간주하도록 설계하는 데 달려 있다. 학습된 정책은 때때로 불확실성, 분포 변화, 타이밍 실패, 잘못된 예측을 경험할 수밖에 없다. 지속적인 모니터링(Continuous Monitoring), 결정론적 오버라이드, 상태 인식형 폴백 행동, 복구 제어(Recovery Control), 인간 개입, 추적 가능한 로깅을 결합하면 일반화 휴머노이드가 통제된 방식으로 실패하면서도 이후 유용한 자율 운용을 다시 시작할 수 있는 가능성을 유지할 수 있다.
+
+## 08.10. Humanoid VLA Production Pilot Evaluation Case
+
+![](images/image10.png){width="7.268055555555556in" height="7.268055555555556in"}
+
+프로덕션 파일럿 평가(Production Pilot Evaluation)는 휴머노이드 VLA 시스템이 연구실 수준의 시연을 넘어 실제 작업 환경에서 신뢰성 있게 운용될 수 있는지를 판단한다. 목표는 로봇이 선택된 작업을 한 번 성공적으로 수행할 수 있음을 증명하는 것이 아니라, 실제 생산 조건에서 반복적으로 운용될 때 인식, 언어 이해, 일반화 정책 추론(Generalist Policy Inference), 전신 실행, 안전 감독(Safety Supervision), 복구 기능이 지속적으로 신뢰성을 유지하는지를 측정하는 것이다.
+
+파일럿은 명확하게 제한된 운영 도메인(Operational Domain)을 정의하는 것에서 시작해야 한다. 제조 환경에서는 부품 가져오기, 용기 운반, 지그 또는 설비에 부품 적재, 자재 분류, 보관함 열기, 작업대 사이의 도구 전달 등이 포함될 수 있다. 작업은 실제 생산 활동에 유용하면서도 체계적인 평가가 가능할 정도로 통제되어야 한다. 작업공간, 객체, 인간 상호작용 구역, 예상 작업 시퀀스, 금지된 행동을 정의하면 성능을 평가할 수 있는 운영 범위(Operating Envelope)가 확립된다.
+
+대표적인 파일럿 환경은 인위적으로 단순화된 시연 공간이 아니라 정상적인 운영 과정에서 발생하는 변동성(Variability)을 유지해야 한다. 객체 위치가 달라지고, 용기가 서로 다른 방향으로 놓이며, 조명이 변하고, 작업대 일부가 가려지거나, 사람이 공유 공간을 이동할 수 있다. 이러한 변화는 VLA 정책이 고정된 실험실 구성과 연결된 궤적을 단순히 재현하는지, 아니면 전이 가능한 작업 구조(Transferable Task Structure)를 실제로 학습했는지를 확인할 수 있게 한다.
+
+작업 명령(Task Instruction) 역시 동일한 운영 의미를 유지하면서 다양하게 변화시켜야 한다. 휴머노이드는 특정 부품을 가져오거나, 자재를 지정된 용기에 넣거나, 물품을 다른 작업대로 운반하거나, 요청된 규칙에 따라 객체를 재배치하라는 명령을 받을 수 있다. 이러한 언어적 변형(Linguistic Variation)을 통해 시스템이 소수의 암기된 명령 템플릿에 의존하지 않고 현재 장면에 언어를 그라운딩(Grounding)하는지를 시험할 수 있다.
+
+파일럿 평가에서는 의미적 이해(Semantic Understanding)와 물리적 실행(Physical Execution)을 분리하여 평가해야 한다. 올바른 객체를 가져오지 못한 실패는 언어 그라운딩(Language Grounding), 시각 인식, 모션 생성(Motion Generation), 파지 실행, 균형 제어 또는 작업 상태 추적(Task-State Tracking) 중 어느 단계에서든 발생할 수 있다. 이러한 단계를 독립적으로 기록하면 평가 지표를 더욱 유용하게 활용할 수 있다. 하나의 작업 성공률만으로는 어떤 하위 시스템이 생산 준비도(Production Readiness)를 제한하고 있으며 어떤 엔지니어링 개선을 우선해야 하는지를 판단하기 어렵다.
+
+작업 완료율(Task Completion Rate)은 핵심 평가 지표이지만 성공 여부는 운영 기준(Operational Criteria)에 따라 정의해야 한다. 집기-배치(Pick-and-Place) 작업을 완료하려면 올바른 객체 선택, 허용 가능한 파지 유지, 손상 없는 운반, 지정된 영역 내 배치, 적절한 최종 로봇 상태로의 복귀가 모두 요구될 수 있다. 부분 완료(Partial Completion)와 완전한 성공(Full Success)을 구분하여 겉으로 높은 성능이 중요한 작업 단계에서 반복적으로 발생하는 실패를 숨기지 않도록 해야 한다.
+
+사이클 시간(Cycle Time)은 또 다른 중요한 생산 지표이다. 휴머노이드가 작업을 신뢰성 있게 완료하더라도 지나치게 느리게 동작한다면 실질적인 가치를 제공하기 어렵다. 평가에서는 전체 작업 시간뿐 아니라 인식, VLA 추론, 보행, 조작, 재계획(Replanning), 복구, 대기에 사용되는 시간을 함께 측정해야 한다. 이러한 구성요소를 비교하면 성능 제한이 학습된 추론, 물리적 움직임, 보수적인 안전 제약 또는 비효율적인 작업 시퀀스 중 어디에서 발생하는지를 파악할 수 있다.
+
+반복 시험에서의 일관성(Consistency)은 가장 빠른 개별 시연보다 중요하다. 생산 시스템은 수백 또는 수천 번의 사이클에 걸쳐 유사한 작업을 수행하면서 설명하기 어려운 성능 저하가 빈번하게 발생하지 않아야 한다. 따라서 파일럿에서는 장시간 운용에 걸친 성공률 분포, 지연시간 변화, 개입 빈도(Intervention Frequency), 실패 재발률을 보고해야 한다. 선택된 시연에서는 인상적인 성능을 보이지만 장시간 운용에서 불안정한 시스템은 생산 준비가 완료되었다고 평가하기 어렵다.
+
+일반화 시험(Generalization Testing)에서는 정확한 학습 시연에 존재하지 않았던 통제된 변화를 도입해야 한다. 객체 위치를 변경하거나, 작업 순서를 바꾸거나, 익숙한 객체를 새로운 조합으로 배치하거나, 다른 표현의 명령을 사용할 수 있다. 목표는 제한 없는 개방형 세계 자율성(Open-World Autonomy)이 아니라, 모든 구성에 대해 재학습이나 수작업 프로그래밍을 수행하지 않고도 일반화 정책이 합리적인 생산 환경의 변화를 처리할 수 있다는 증거를 확보하는 것이다.
+
+장기 작업 평가(Long-Horizon Evaluation)는 생산 작업이 여러 개의 상호 의존적인 단계로 구성되는 경우가 많기 때문에 특히 중요하다. 휴머노이드는 작업대에 접근하고, 객체를 식별하고, 파지하고, 다른 위치까지 걸어가고, 객체를 배치하고, 완료 여부를 확인한 후 다음 작업을 수행해야 할 수 있다. 작은 오류는 이러한 단계가 진행되는 동안 누적될 수 있다. 따라서 개별 조작 기술뿐 아니라 전체 워크플로 성공률(Workflow Success Rate)을 함께 측정해야 한다.
+
+복구 능력(Recovery Capability)은 강건한 파일럿과 단순한 스크립트 기반 시연을 구분하는 요소이다. 객체가 미끄러지거나, 파지가 실패하거나, 이동 경로가 차단되거나, 로봇이 기존 행동을 계속하기 어려운 구성에 도달할 수 있다. VLA 시스템은 비정상적인 작업 진행 상태를 인식하고 적절한 복구, 재관측(Re-Observation), 재계획 절차를 시도해야 한다. 평가 지표에서는 자율 복구(Autonomous Recovery)와 인간 개입이 필요한 실패를 구분해야 한다.
+
+인간 개입률(Human Intervention Rate)은 운영 자율성(Operational Autonomy)을 직접적으로 나타내는 지표이다. 작업자는 모호한 명령을 명확히 하거나, 객체 위치를 조정하거나, 로봇을 초기화하거나, 어려운 상황을 원격조작(Teleoperation)하거나, 소프트웨어 오류에서 복구해야 할 수 있다. 각 개입은 유형별로 분류하고 소요 시간을 측정해야 한다. 명목상 작업 성공률이 높더라도 작업자가 지속적으로 감독하거나 로봇을 복구해야 한다면 운영 부담이 지나치게 커질 수 있다.
+
+안전 성능(Safety Performance)은 생산성(Productivity)과 독립적으로 평가해야 한다. 파일럿에서는 충돌 회피 이벤트, 과도한 힘 발생, 균형 제어 개입, 작업공간 위반, 비상 정지(Emergency Stop), 보호 정지(Protective Stop), 거부된 VLA 행동을 기록해야 한다. 위험한 행동을 통해 빠르게 완료된 작업을 성공으로 간주해서는 안 된다. 비정상적인 명령과 환경 외란(Environmental Disturbance)에서도 안전 오버라이드(Safety Override)가 예측 가능한 방식으로 작동하는지 의도적으로 시험해야 한다.
+
+휴머노이드가 작업자와 생산 공간을 공유하는 경우 사람 근접 시험(Human Proximity Test)이 특히 중요하다. 사람이 로봇의 운용 영역에 진입하거나, 조작 중인 객체에 접근하거나, 계획된 경로를 일시적으로 차단할 때 로봇은 적절하게 대응해야 한다. 시스템 설계에 따라 속도 감소, 자세 유지, 재계획 또는 보호 정지를 수행할 수 있다. 작업공간이 다시 확보된 이후의 실행 재개 행동(Resumption Behavior)도 평가해야 하는데, 불필요한 수동 초기화가 많아지면 실제 가용성(Availability)이 감소하기 때문이다.
+
+전신 안정성(Whole-Body Stability)은 조작과 보행 과정 전체에서 모니터링해야 한다. 생산 작업에서는 작업공간의 한계에 가까운 위치로 손을 뻗거나, 하중을 운반하거나, 몸을 숙이거나, 회전하거나, 양손을 협응해야 할 수 있다. 평가에서는 균형 제어기 개입, 예상하지 못한 발 위치 조정, 자세 제한 위반, 접촉 불안정성(Contact Instability), 복구 이벤트를 기록해야 한다. 손 수준의 조작에는 성공하지만 반복적으로 신체를 불안정한 구성으로 유도하는 VLA 정책은 추가적인 시스템 통합이 필요하다.
+
+온보드 추론 성능(Onboard Inference Performance)은 전체 생산 소프트웨어 워크로드가 실행되는 조건에서 측정해야 한다. 종단간 지연시간(End-to-End Latency)은 단순한 신경망 실행 시간만이 아니라 센서 데이터 획득, 전처리, VLA 실행, 안전 검사, 제어기 전달까지 포함한다. 장시간 운용에서는 최대 메모리 사용량, 가속기 사용률, 열적 거동(Thermal Behavior), 전력 소비도 관측해야 한다. 이러한 측정은 컴퓨팅 플랫폼이 다른 로봇 기능의 성능을 저하시키지 않으면서 정책을 지속적으로 실행할 수 있는지를 판단하게 한다.
+
+파일럿이 일반적으로 안정적인 네트워크 연결을 사용하더라도 네트워크 의존성(Network Dependency)은 명시적으로 평가해야 한다. 외부 서비스가 일시적으로 중단되더라도 기본적인 안전, 균형 유지, 제어된 정지(Controlled Stop) 기능이 사라져서는 안 된다. 클라우드 또는 원격 자원이 선택적인 계획이나 모니터링을 제공하는 경우 통신을 사용할 수 없을 때 기능이 어떻게 저하되는지 시험해야 한다. 연결이 복구된 이후에도 작업 상태가 손상되거나 행동이 중복되지 않도록 정상적으로 복구되어야 한다.
+
+데이터 로깅(Data Logging)은 파일럿 자체가 일반화 정책을 개선하기 위한 메커니즘이기도 하므로 필수적이다. 각 에피소드에서는 동기화된 관측, 명령, VLA 출력, 실제 실행 행동, 안전 수정 사항, 제어기 상태, 인간 개입, 복구 시도, 최종 결과를 보존해야 한다. 특히 실패 에피소드(Failure Episode)는 정제된 학습 시연에서 나타나지 않았던 분포의 공백(Distribution Gap)을 드러내므로 이후의 데이터 수집이나 미세조정(Fine-Tuning) 방향을 결정하는 데 매우 가치가 있다.
+
+평가 데이터셋(Evaluation Dataset)은 정책 업데이트를 객관적으로 비교할 수 있도록 고정된 벤치마크 하위 집합(Fixed Benchmark Subset)을 유지해야 한다. 파일럿 중 수집된 새로운 시연을 이용하여 어려운 사례를 개선할 수 있지만, 관측된 모든 실패를 학습에 사용한 뒤 동일한 시나리오로 다시 평가하면 결과가 왜곡될 수 있다. 따라서 통제된 회귀 시험 세트(Regression Suite)는 적응 데이터(Adaptation Data)와 분리해야 하며, 새로운 모델 버전으로 인해 발생하는 성능 회귀를 탐지하기 위해 이전에 성공했던 작업도 포함해야 한다.
+
+단계적 파일럿(Staged Pilot)은 배포 위험을 줄인다. 초기 시험에서는 격리된 작업공간과 감독된 운용을 사용하고, 이후 더 긴 자율 운용 세션이나 사람과 공유하는 환경으로 확대할 수 있다. 정의된 신뢰성, 안전, 복구, 개입 임계값을 달성한 이후에만 기능 범위를 확장해야 한다. 이러한 단계적 진행은 엔지니어링 팀이 실험적 능력(Experimental Capability)과 검증된 운영 능력(Validated Operating Capability)을 구분하고, 성공적인 시연을 성급하게 생산 성숙도(Production Maturity)로 해석하는 것을 방지한다.
+
+운영 가용성(Operational Availability)은 실제 작업을 수행하는 시간뿐 아니라 전체 운용 세션을 기준으로 측정해야 한다. 모델 충돌(Model Crash), 센서 고장, 보정 손실(Calibration Loss), 열 스로틀링(Thermal Throttling), 배터리 교체, 소프트웨어 재시작, 수동 복구는 모두 실질적인 가용성을 감소시킨다. 개입 간 평균 시간(Mean Time Between Interventions)과 정상 운용을 복구하는 데 필요한 시간은 작업 정확도만 측정하는 것보다 생산 성능을 더욱 현실적으로 보여준다.
+
+기술적 신뢰성이 확보된 이후에는 경제성 평가(Economic Evaluation)를 추가할 수 있다. 유용한 지표에는 운용 시간당 완료 작업 수, 인간 감독 시간, 복구 작업량, 에너지 소비, 유지보수 요구사항, 새로운 작업 변형에 필요한 작업별 엔지니어링(Task-Specific Engineering)의 양이 포함된다. 일반화 VLA 시스템의 가치는 반복적인 프로그래밍 및 통합 작업을 줄이는 데에도 있으므로 직접적인 사이클 시간 성능뿐 아니라 적응 비용(Adaptation Cost)도 함께 고려해야 한다.
+
+따라서 생산 승인 기준(Production Acceptance Criteria)은 작업 성능, 안전성, 신뢰성, 일반화 능력, 복구 능력, 컴퓨팅 지속 가능성(Computing Sustainability), 운영 부담을 종합해야 한다. 하나의 지표만으로는 충분하지 않다. 휴머노이드가 정의된 운영 범위 내에서 유용한 워크플로를 반복적으로 완료하고, 예상 가능한 변화를 처리하며, 비정상 상황에서 안전하게 전환하고, 의도된 배포 모델과 호환되는 수준의 인간 개입만을 요구할 때 파일럿을 성공적인 것으로 평가할 수 있다.
+
+최종 파일럿 보고서(Final Pilot Report)는 관측된 모든 실패를 인식, 언어 그라운딩, VLA 정책, 행동 표현(Action Representation), 전신 제어, 하드웨어, 안전 감독 또는 운영 절차와 같은 실행 가능한 시스템 범주(Actionable System Category)에 연결해야 한다. 이를 통해 파일럿 평가는 단순한 시연 점수가 아니라 엔지니어링 피드백 루프(Engineering Feedback Loop)로 전환된다. 이후 개선 작업은 독립적인 모델 벤치마크가 아니라 실제 생산 신뢰성에 미치는 영향을 기준으로 우선순위를 결정할 수 있다.
+
+궁극적으로 휴머노이드 VLA 프로덕션 파일럿은 지속적인 물리적 운용 환경에서 인식부터 행동까지 이어지는 전체 시스템(Perception-to-Action System)을 검증한다. 일반화 지능(Generalist Intelligence)은 유연한 작업 실행 능력을 제공하지만, 생산 준비도는 이러한 지능이 결정론적 제어(Deterministic Control), 안전 오버라이드, 복구, 신뢰성 있는 온보드 컴퓨팅, 구조화된 평가, 지속적인 운영 측정과 통합될 때 비로소 확보된다. 따라서 프로덕션 파일럿은 학습된 능력(Learned Capability)을 검증된 물리적 자율성(Validated Physical Autonomy)으로 전환하는 단계라고 할 수 있다.
